@@ -1,0 +1,31 @@
+/home/rada/Projects/wifi_usb_storage/.cache/core/idf_openthread_mpool_wrapper.c.o: \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/idf_openthread_mpool_wrapper.c \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/soc/esp32c6/include/soc/soc_caps.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/qio_qspi/include/sdkconfig.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/newlib/platform_include/assert.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/heap/include/esp_heap_caps.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/heap/include/multi_heap.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_err.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/newlib/platform_include/stdio.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_compiler.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_attr.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_rom/include/esp_rom_sys.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/soc/esp32c6/include/soc/reset_reasons.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_config.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_level.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_assert.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_color.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_buffer.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_timestamp.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_write.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_format.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_args.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_macros.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_assert.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_attr.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_private/log_attr.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/openthread/openthread/include/openthread/instance.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/openthread/openthread/include/openthread/error.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/openthread/openthread/include/openthread/platform/toolchain.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/openthread/openthread/include/openthread/platform/messagepool.h

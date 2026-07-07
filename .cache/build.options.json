@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "../../..,../../..,../../..,../../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..,../..",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:esp32c6:PartitionScheme=huge_app",
+  "hardwareFolders": "/home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10,/home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10",
+  "otherLibrariesFolders": "/home/rada/Arduino/libraries",
+  "sketchLocation": "/home/rada/Projects/wifi_usb_storage"
+}

@@ -1,0 +1,37 @@
+/home/rada/Projects/wifi_usb_storage/.cache/libraries/Hash/SHA3Builder.cpp.o: \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/Hash/src/SHA3Builder.cpp \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/esp32-hal-log.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_timer/include/esp_timer.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/newlib/platform_include/stdio.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_err.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_compiler.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_hw_support/include/esp_etm.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_rom/esp32c6/include/esp32c6/rom/ets_sys.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_rom/include/esp_rom_sys.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/soc/esp32c6/include/soc/reset_reasons.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/soc/esp32c6/include/soc/soc_caps.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_config.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_level.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_assert.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_color.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_buffer.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_timestamp.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_write.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_format.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_args.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_macros.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_assert.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_log_attr.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/esp_common/include/esp_attr.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/log/include/esp_private/log_attr.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/Hash/src/SHA3Builder.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/WString.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/pgmspace.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/newlib/platform_include/ctype.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/Stream.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/Print.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/WString.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/Printable.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/HashBuilder.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/HEXBuilder.h

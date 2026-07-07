@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build firmware",
+      "type": "shell",
+      "command": "${workspaceFolder}/tools/build.sh",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "options": { "statusbar": { "label": "$(tools) Build" } }
+    },
+    {
+      "label": "Upload firmware",
+      "type": "shell",
+      "command": "${workspaceFolder}/tools/build.sh",
+      "args": ["upload"],
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true },
+      "options": { "statusbar": { "label": "$(rocket) Upload" } }
+    }
+  ]
+}
