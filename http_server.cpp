@@ -16,10 +16,14 @@
 WebServer* webServer = nullptr;
 
 // --- SD-present guard ---
-// Without an SD card there is nowhere to store WiFi credentials or files, so
-// every endpoint just reports the problem instead of doing its normal job.
+// Without a usable SD card there is nowhere to store files, so every
+// SD-dependent endpoint just reports the problem instead of doing its job.
 static void showSDMissing(void){
-  webServer->send(200, "text/plain", "No Micro SD card detected. Please insert!");
+  if(SDSTOR_isFaulty()){
+    webServer->send(200, "text/plain", "SD card detected, but its filesystem could not be read. It may be corrupted or unformatted.");
+  }else{
+    webServer->send(200, "text/plain", "No Micro SD card detected. Please insert!");
+  }
 }
 
 static bool requireSD(void){
@@ -32,24 +36,25 @@ static bool requireSD(void){
 
 // --- Page handlers ---
 void showStartPage() {
-  if(!requireSD()){
-    return;
-  }
   String response = FPSTR(HTML_BEGIN);
   response += FPSTR(INDEX_HTML_0);
   response += FPSTR(NAV_HTML);
   response += "<h1>WiFi File Storage</h1>";
   response += "<p class='ip'>Station IP: " + WIFIC_getStationIp() + "</p>";
-  response += FPSTR(INDEX_HTML_1);
+  if(SDSTOR_isReady()){
+    response += FPSTR(INDEX_HTML_1);
+  }else if(SDSTOR_isFaulty()){
+    response += FPSTR(SD_FAULTY_HTML);
+  }else{
+    response += FPSTR(SD_MISSING_HTML);
+  }
+  response += FPSTR(SD_POLL_HTML);
   response += FPSTR(HTML_END);
   webServer->send(200, "text/html", response);
 }
 
 
 static void showApiPage(void){
-  if(!requireSD()){
-    return;
-  }
   String response = FPSTR(HTML_BEGIN);
   response += FPSTR(API_HTML_0);
   response += FPSTR(NAV_HTML);
@@ -74,9 +79,6 @@ static void showStatusPage(bool goToHome = false) {
 }
 
 static void selectAP(void) {
-  if(!requireSD()){
-    return;
-  }
   WIFIC_startScan();   // kick off the scan; JS fetches /aplist ~10 s later
   String response = FPSTR(HTML_BEGIN);
   response += FPSTR(APLIST_HTML_0);
@@ -88,9 +90,6 @@ static void selectAP(void) {
 }
 
 static void saveWiFi(void){
-  if(!requireSD()){
-    return;
-  }
   String ssid = webServer->arg("s");
   String pass = webServer->arg("p");
 
@@ -198,10 +197,28 @@ static void uploadDone(void){
 }
 
 static void apList(void){
-  if(!requireSD()){
-    return;
-  }
   webServer->send(200, "text/plain", WIFIC_getApList());
+}
+
+static void sdStatus(void){
+  String s = SDSTOR_isReady() ? "ready" : (SDSTOR_isFaulty() ? "faulty" : "missing");
+  webServer->send(200, "text/plain", s);
+}
+
+static void ejectSD(void){
+  if(SDSTOR_eject()){
+    webServer->send(200, "text/plain", "SD card safely ejected. You may remove it now.");
+  }else{
+    webServer->send(200, "text/plain", "No SD card to eject.");
+  }
+}
+
+static void formatSD(void){
+  if(SDSTOR_format()){
+    webServer->send(200, "text/plain", "SD card formatted.");
+  }else{
+    webServer->send(400, "text/plain", "Format failed. Check the card is inserted and not write-protected.");
+  }
 }
 
 // --- Public functions ---
@@ -225,6 +242,9 @@ void HTTP_SERVER_init(void){
   webServer->on("/upload", HTTP_POST, uploadDone, uploadFile_handler);
   webServer->on("/delete", HTTP_GET, deleteFile);
   webServer->on("/aplist", HTTP_GET, apList);
+  webServer->on("/api/sdstatus", HTTP_GET, sdStatus);
+  webServer->on("/eject", HTTP_GET, ejectSD);
+  webServer->on("/format", HTTP_GET, formatSD);
   webServer->onNotFound(showStartPage);
 
   webServer->begin();

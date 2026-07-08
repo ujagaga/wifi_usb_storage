@@ -212,4 +212,5 @@ wifi_connection.o: \
  /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/esp32-hal-spi.h \
  /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/SD/src/sd_defines.h \
  /home/rada/Projects/wifi_usb_storage/.cache/sketch/config.h \
- /home/rada/Projects/wifi_usb_storage/.cache/sketch/lcd_display.h
+ /home/rada/Projects/wifi_usb_storage/.cache/sketch/lcd_display.h \
+ /home/rada/Projects/wifi_usb_storage/.cache/sketch/sd_storage.h

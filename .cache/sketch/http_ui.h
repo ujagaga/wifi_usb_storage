@@ -78,18 +78,31 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   <div class="center_div">
 )";
 
-static const char INDEX_HTML_1[] PROGMEM = R"(
+static const char SD_MISSING_HTML[] PROGMEM = R"(
   <div class="card">
-    <div class="btn-row">
-      <label class="btn accent" for="up">Upload file</label>
-      <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
-    </div>
-  </div>
-  <div class="card">
-    <p class="ghead">Files on SD card</p>
-    <table class="files"><tbody id="flist"></tbody></table>
+    <p class="ghead">SD Card</p>
+    <p style="color:#ff8b8b;">No Micro SD card detected. Please insert an SD card to enable file storage.</p>
   </div>
 </div>
+)";
+
+static const char SD_FAULTY_HTML[] PROGMEM = R"(
+  <div class="card">
+    <p class="ghead">SD Card</p>
+    <p style="color:#ffcf7a;">SD card detected, but its filesystem could not be read. It may be corrupted or unformatted - formatting will erase it and fix this.</p>
+    <div class="btn-row">
+      <button class="btn" onclick="formatSD();">Format SD card</button>
+    </div>
+  </div>
+</div>
+)";
+
+// Always emitted at the end of the start page (both with and without a card),
+// so the status div/functions and the format button exist regardless of
+// whether the ready/faulty/missing block was rendered above. Also polls SD
+// status so the page reloads itself as soon as it changes (inserted, ejected,
+// or turns out to be faulty).
+static const char SD_POLL_HTML[] PROGMEM = R"(
 <div id="status"></div>
 <script>
   function showStatus(msg, kind){
@@ -97,6 +110,43 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
     s.textContent=msg;
     s.className=kind||'info';
   }
+  function formatSD(){
+    if(!confirm('This will ERASE ALL DATA on the SD card. Continue?')){ return; }
+    showStatus('Formatting SD card...', 'info');
+    fetch('/format').then(function(r){
+      return r.text().then(function(t){
+        showStatus(t, r.ok ? 'ok' : 'err');
+        setTimeout(function(){ location.reload(); }, 1200);
+      });
+    }).catch(function(e){ showStatus('Format error: ' + e.message, 'err'); });
+  }
+  var __sdKnown = null;
+  function __pollSd(){
+    fetch('/api/sdstatus').then(function(r){return r.text();}).then(function(t){
+      t = t.trim();
+      if(__sdKnown===null){ __sdKnown=t; return; }
+      if(t!==__sdKnown){ location.reload(); }
+    }).catch(function(){});
+  }
+  setInterval(__pollSd, 3000);
+</script>
+)";
+
+static const char INDEX_HTML_1[] PROGMEM = R"(
+  <div class="card">
+    <div class="btn-row">
+      <label class="btn accent" for="up">Upload file</label>
+      <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
+      <button class="btn" onclick="ejectSD();">Eject SD card</button>
+      <button class="btn" onclick="formatSD();">Format SD card</button>
+    </div>
+  </div>
+  <div class="card">
+    <p class="ghead">Files on SD card</p>
+    <table class="files"><tbody id="flist"></tbody></table>
+  </div>
+</div>
+<script>
   function fmtSize(n){
     if(n<1024){ return n+' B'; }
     if(n<1024*1024){ return (n/1024).toFixed(1)+' KB'; }
@@ -114,6 +164,12 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         }
       });
     }).catch(function(e){ showStatus('Delete error: ' + e.message, 'err'); });
+  }
+  function ejectSD(){
+    fetch('/eject').then(function(r){return r.text();}).then(function(t){
+      showStatus(t, 'ok');
+      setTimeout(function(){ location.reload(); }, 800);
+    }).catch(function(e){ showStatus('Eject error: ' + e.message, 'err'); });
   }
   function loadFiles(){
     fetch('/api/filelist').then(function(r){return r.text();}).then(function(t){
@@ -298,6 +354,9 @@ static const char API_HTML_1[] PROGMEM = R"(
     <tr><td class="m">GET</td><td><code>/</code></td><td>Main web page</td></tr>
     <tr><td class="m">GET</td><td><code>/selectap</code></td><td>WiFi config page (starts an async scan)</td></tr>
     <tr><td class="m">GET</td><td><code>/api</code></td><td>This documentation page</td></tr>
+    <tr><td class="m">GET</td><td><code>/api/sdstatus</code></td><td>Returns <code>ready</code>, <code>faulty</code> (present, unreadable filesystem) or <code>missing</code></td></tr>
+    <tr><td class="m">GET</td><td><code>/eject</code></td><td>Finish pending writes and unmount the SD card for safe removal</td></tr>
+    <tr><td class="m">GET</td><td><code>/format</code></td><td>Erase the SD card and lay down a fresh filesystem</td></tr>
   </table>
   <p class="sub">The page reads the file list on load and after each action.</p>
 </div></div>

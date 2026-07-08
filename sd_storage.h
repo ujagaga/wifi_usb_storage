@@ -9,7 +9,10 @@ class WebServer;
 // SPI bus with the LCD; see lcd_display.h LCD_busRelease/LCD_busAcquire.
 
 extern bool SDSTOR_init(void);
-extern bool SDSTOR_isReady(void);          // true if the SD card was detected
+extern bool SDSTOR_isReady(void);          // true if the SD card is mounted and usable
+extern bool SDSTOR_isFaulty(void);         // true if a card is present but its filesystem can't be read
+extern bool SDSTOR_eject(void);            // finish pending writes, unmount for safe removal
+extern bool SDSTOR_format(void);           // wipe the card and lay down a fresh FAT filesystem
 extern String SDSTOR_list(void);           // "name:size|name:size|..."
 extern bool SDSTOR_sendRaw(String name, WebServer* server);  // stream file to HTTP client
 extern bool SDSTOR_delete(String name);

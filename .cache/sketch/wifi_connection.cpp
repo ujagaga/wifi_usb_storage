@@ -7,13 +7,14 @@
  *  - AP always on
  *  - STA connects if saved
  *  - Automatic reconnection handled by ESP32 core
- *  - SD card stores SSID and password (see WIFI_CFG_PATH)
+ *  - SSID/password live in RAM, mirrored to SD (WIFI_CFG_PATH) if a card is present
  */
 
 #include <WiFi.h>
 #include <SD.h>
 #include "config.h"
 #include "lcd_display.h"
+#include "sd_storage.h"
 
 // -----------------------------------------------------------------------------
 // Local variables
@@ -26,6 +27,7 @@ static IPAddress apIP(192, 168, 4, 1);
 static bool stationConnectedOnce = false; // mark first successful STA connect
 static unsigned long apIdleSince = 0;     // millis the AP last had zero clients
 static bool apDisabled = false;           // AP turned off to save power
+static bool sdWasReady = false;           // edge-detects SD card hot-insert
 
 // -----------------------------------------------------------------------------
 // Getters
@@ -48,8 +50,13 @@ String WIFIC_getStPass(void) {
 
 // -----------------------------------------------------------------------------
 // SD card helpers (WIFI_CFG_PATH: line 1 = ssid, line 2 = password)
+// Credentials always live in RAM (st_ssid/st_pass); the SD file is only a
+// mirror that's written/read when a card happens to be present.
 // -----------------------------------------------------------------------------
 static void saveCredsToSD(void) {
+    if (!SDSTOR_isReady()) {
+        return;
+    }
     LCD_busRelease();
     if (SD.exists(WIFI_CFG_PATH)) {
         SD.remove(WIFI_CFG_PATH);
@@ -61,6 +68,31 @@ static void saveCredsToSD(void) {
         f.close();
     }
     LCD_busAcquire();
+}
+
+// Loads RAM creds from the SD file if one exists; otherwise creates the file
+// from whatever's currently in RAM. Returns true if creds were loaded from
+// an existing file (caller should then reconnect with them).
+static bool loadOrCreateCredsFromSD(void) {
+    if (!SDSTOR_isReady()) {
+        return false;
+    }
+    LCD_busRelease();
+    File f = SD.open(WIFI_CFG_PATH);
+    bool exists = (bool)f;
+    if (exists) {
+        st_ssid = f.readStringUntil('\n');
+        st_ssid.trim();
+        st_pass = f.readStringUntil('\n');
+        st_pass.trim();
+        f.close();
+    }
+    LCD_busAcquire();
+
+    if (!exists) {
+        saveCredsToSD();
+    }
+    return exists;
 }
 
 void WIFIC_setStSSID(String new_ssid) {
@@ -83,7 +115,9 @@ static void APMode(void) {
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
 
-    String apName = String(AP_NAME_PREFIX) + WiFi.macAddress();
+    String mac = WiFi.macAddress();
+    mac.replace(":", "");
+    String apName = String(AP_NAME_PREFIX) + mac;
     apName.toCharArray(myApName, 32);
 
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
@@ -134,18 +168,10 @@ void WIFIC_setupCallbacks(void) {
 // Initialize Wi-Fi module
 // -----------------------------------------------------------------------------
 void WIFIC_init(void) {
-    // Load saved credentials from SD (requires SD.begin() already done, e.g.
-    // via SDSTOR_init(), and the LCD already initialized for the shared bus).
-    LCD_busRelease();
-    File f = SD.open(WIFI_CFG_PATH);
-    if (f) {
-        st_ssid = f.readStringUntil('\n');
-        st_ssid.trim();
-        st_pass = f.readStringUntil('\n');
-        st_pass.trim();
-        f.close();
-    }
-    LCD_busAcquire();
+    // Load saved credentials from SD if a card happens to be present already
+    // (no-op otherwise - creds simply stay RAM-only until a card shows up).
+    loadOrCreateCredsFromSD();
+    sdWasReady = SDSTOR_isReady();
 
     // Setup AP and STA
     APMode();
@@ -158,6 +184,15 @@ void WIFIC_init(void) {
 // have been connected for AP_AUTO_OFF_MS (saves power in station-only mode).
 // -----------------------------------------------------------------------------
 void WIFIC_process(void) {
+    // SD card was just inserted: pick up creds saved on it, if any.
+    bool sdReady = SDSTOR_isReady();
+    if (sdReady && !sdWasReady) {
+        if (loadOrCreateCredsFromSD()) {
+            WIFIC_stationMode();
+        }
+    }
+    sdWasReady = sdReady;
+
     if (apDisabled || !stationConnectedOnce || WiFi.status() != WL_CONNECTED) {
         return;
     }

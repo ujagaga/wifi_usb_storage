@@ -200,6 +200,11 @@
  /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/WebServer/src/Uri.h \
  /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/WebServer/src/middleware/Middleware.h \
  /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/WebServer/src/detail/RequestHandler.h \
+ /home/rada/.arduino15/packages/esp32/hardware/esp32/3.3.10/libraries/SD/src/sd_diskio.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/fatfs/src/diskio.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/fatfs/src/ff.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/fatfs/src/ffconf.h \
+ /home/rada/.arduino15/packages/esp32/tools/esp32c6-libs/3.3.10/include/fatfs/src/ff.h \
  /home/rada/Projects/wifi_usb_storage/.cache/sketch/config.h \
  /home/rada/Projects/wifi_usb_storage/.cache/sketch/lcd_display.h \
  /home/rada/Projects/wifi_usb_storage/.cache/sketch/sd_storage.h

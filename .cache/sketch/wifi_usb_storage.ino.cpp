@@ -85,8 +85,9 @@ void loop(void){
   WIFIC_process();
 
   // The AP screen stays up (SSID/pass/IP) until the station interface actually
-  // connects, then it's replaced by the station SSID/IP. Without an SD card or
-  // saved credentials, station never connects, so the AP screen just stays.
+  // connects, then it's replaced by the station SSID/IP. Without saved
+  // credentials (SD or RAM-only, set via the web UI), station never
+  // connects, so the AP screen just stays.
   if(state == ShowAp){
     String stationIp = WIFIC_getStationIp();
     if(stationIp.length() > 1){

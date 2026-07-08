@@ -20,8 +20,9 @@
 // brought back automatically if the station connection is later lost.
 #define AP_AUTO_OFF_MS          (120000)
 
-// WiFi credentials are stored as text on the SD card (ssid on line 1, password
-// on line 2) instead of EEPROM, since the SD card is always present.
+// WiFi credentials live in RAM only. If an SD card is present they are also
+// mirrored to this file (ssid on line 1, password on line 2) so they survive
+// a reboot; without a card (or before one is inserted) they are RAM-only.
 #define WIFI_CFG_PATH           "/wifi.cfg"
 
 // ESP32-C6-LCD-1.47 display pins (Waveshare wiki)
