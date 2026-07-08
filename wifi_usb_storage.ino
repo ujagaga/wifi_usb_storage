@@ -44,13 +44,15 @@ static void display_ap_info(void)
 static void display_station_info(String ip)
 {
   LCD_clear();
+  LCD_setFont(Font9pt);
   LCD_color(C_YELLOW);
-  LCD_write("\nConnected SSID:\n");
+  LCD_write("\n\nConnected SSID:\n");
   LCD_color(C_WHITE);
   LCD_write(WIFIC_getStSSID());
   LCD_color(C_YELLOW);
-  LCD_write("\nIP:");
+  LCD_write("\n\nIP: ");
   LCD_color(C_WHITE);
+  LCD_setFont(Font12pt);
   LCD_write(ip);
 }
 

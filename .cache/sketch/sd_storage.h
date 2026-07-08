@@ -8,6 +8,11 @@ class WebServer;
 
 // Generic file storage on the microSD card (root directory only). Shares the
 // SPI bus with the LCD; see lcd_display.h LCD_busRelease/LCD_busAcquire.
+//
+// Logical files bigger than SD_PART_MAX_BYTES (FAT32's 4GiB-1 per-file cap)
+// are transparently split into hidden numbered part files plus a manifest;
+// callers never see this - SDSTOR_list/_sendRaw/_delete all operate on the
+// single logical name and combined size.
 
 extern bool SDSTOR_init(void);
 extern bool SDSTOR_isReady(void);          // true if the SD card is mounted and usable

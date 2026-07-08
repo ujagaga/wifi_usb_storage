@@ -81,7 +81,80 @@ bool SDSTOR_isReady(void){
   return cardReady;
 }
 
-// Return root-level file names joined with '|', each as "name:size".
+// --- Split-file layout for logical files bigger than SD_PART_MAX_BYTES ---
+// A logical file "name" that never exceeds the cap is stored exactly as
+// before: a single plain file "/name". One that grows past the cap during
+// upload is transparently split into hidden part files "/.name.001",
+// "/.name.002", ... plus a hidden manifest "/.name.manifest" holding the
+// total byte count. Anything starting with '.' is considered internal and
+// is skipped by the listing (see SDSTOR_list()).
+#define SD_MANIFEST_SUFFIX ".manifest"
+
+static String partPath(const String& baseName, int idx){
+  char suffix[8];
+  snprintf(suffix, sizeof(suffix), "%03d", idx);
+  return "/." + baseName + "." + String(suffix);
+}
+
+static String manifestPath(const String& baseName){
+  return "/." + baseName + SD_MANIFEST_SUFFIX;
+}
+
+// Sanitize to a safe root-level path. Returns "" if invalid.
+static String sanitizeName(String name){
+  int slash = name.lastIndexOf('/');
+  if(slash >= 0){
+    name = name.substring(slash + 1);
+  }
+  slash = name.lastIndexOf('\\');
+  if(slash >= 0){
+    name = name.substring(slash + 1);
+  }
+  if(name.length() == 0 || name.length() > 64){
+    return "";
+  }
+  for(unsigned i = 0; i < name.length(); i++){
+    char c = name[i];
+    bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' || c == ' ';
+    if(!ok){
+      return "";
+    }
+  }
+  return "/" + name;
+}
+
+// Deletes a logical file regardless of how it's stored: a single plain file,
+// or - for anything that outgrew SD_PART_MAX_BYTES during upload - a
+// manifest plus a run of hidden numbered part files. Returns true if
+// anything existed to delete. Caller holds the SD bus.
+static bool removeLogicalFile(const String& baseName){
+  bool existed = false;
+
+  String plain = "/" + baseName;
+  if(SD.exists(plain)){
+    SD.remove(plain);
+    existed = true;
+  }
+
+  String mPath = manifestPath(baseName);
+  if(SD.exists(mPath)){
+    SD.remove(mPath);
+    existed = true;
+    for(int i = 1; ; i++){
+      String p = partPath(baseName, i);
+      if(!SD.exists(p)){
+        break;
+      }
+      SD.remove(p);
+    }
+  }
+
+  return existed;
+}
+
+// Return root-level file names joined with '|', each as "name:size". Split
+// files are reported once, under their logical name, with their combined size.
 String SDSTOR_list(void){
   String result = "";
   if(!cardReady){
@@ -89,22 +162,82 @@ String SDSTOR_list(void){
   }
 
   LCD_busRelease();
+
+  // Pass 1: split files, represented by their hidden manifest.
   File root = SD.open("/");
   if(root){
     for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
-      if(!entry.isDirectory()){
+      String n = String(entry.name());
+      if(!entry.isDirectory() && n.length() > 0 && n[0] == '.' && n.endsWith(SD_MANIFEST_SUFFIX)){
+        String total = "";
+        while(entry.available()){
+          char c = (char)entry.read();
+          if(c == '\n' || c == '\r'){
+            break;
+          }
+          total += c;
+        }
+        String logicalName = n.substring(1, n.length() - strlen(SD_MANIFEST_SUFFIX));
         if(result.length() > 0){
           result += "|";
         }
-        result += String(entry.name()) + ":" + String(entry.size());
+        result += logicalName + ":" + total;
       }
       entry.close();
     }
     root.close();
   }
+
+  // Pass 2: plain files (anything starting with '.' is an internal part/manifest).
+  root = SD.open("/");
+  if(root){
+    for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
+      String n = String(entry.name());
+      if(!entry.isDirectory() && !(n.length() > 0 && n[0] == '.')){
+        if(result.length() > 0){
+          result += "|";
+        }
+        result += n + ":" + String(entry.size());
+      }
+      entry.close();
+    }
+    root.close();
+  }
+
   LCD_busAcquire();
 
   return result;
+}
+
+// Streams the hidden numbered parts of a split logical file back to back.
+// The combined size can exceed what WebServer's 32-bit setContentLength()
+// can express, so this uses chunked transfer encoding instead of a fixed
+// Content-Length.
+static bool sendSplitFile(const String& baseName, const String& displayName, WebServer* server){
+  server->sendHeader("Content-Disposition", "attachment; filename=\"" + displayName + "\"");
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/octet-stream", "");
+
+  static uint8_t buf[512];
+  for(int i = 1; ; i++){
+    LCD_busRelease();
+    File f = SD.open(partPath(baseName, i));
+    LCD_busAcquire();
+    if(!f){
+      break;   // no more parts
+    }
+    while(true){
+      LCD_busRelease();
+      int got = f.read(buf, sizeof(buf));
+      LCD_busAcquire();
+      if(got <= 0){
+        break;
+      }
+      server->sendContent((const char*)buf, got);
+    }
+    f.close();
+  }
+  return true;
 }
 
 // Stream a file to an HTTP client as application/octet-stream, download-as-attachment.
@@ -114,6 +247,15 @@ bool SDSTOR_sendRaw(String name, WebServer* server){
   }
 
   String path = name.startsWith("/") ? name : ("/" + name);
+  String baseName = path.substring(1);
+
+  LCD_busRelease();
+  bool isSplit = SD.exists(manifestPath(baseName));
+  LCD_busAcquire();
+
+  if(isSplit){
+    return sendSplitFile(baseName, name, server);
+  }
 
   LCD_busRelease();
   File f = SD.open(path);
@@ -143,35 +285,14 @@ bool SDSTOR_sendRaw(String name, WebServer* server){
 
 // --- Incremental upload to SD ---
 static File uploadFile;
-static String uploadPath;
+static String uploadBaseName;     // logical name, no leading slash (e.g. "foo.bin")
+static uint64_t uploadPartBytes;  // bytes written to the currently open plain/part file
+static uint64_t uploadTotalBytes; // bytes written overall, across all parts
+static int uploadPartIndex;       // 0 = still writing the plain (unsplit) file; >=1 once split
 static String uploadErr;
 
 String SDSTOR_lastError(void){
   return uploadErr;
-}
-
-// Sanitize to a safe root-level path. Returns "" if invalid.
-static String sanitizeName(String name){
-  int slash = name.lastIndexOf('/');
-  if(slash >= 0){
-    name = name.substring(slash + 1);
-  }
-  slash = name.lastIndexOf('\\');
-  if(slash >= 0){
-    name = name.substring(slash + 1);
-  }
-  if(name.length() == 0 || name.length() > 64){
-    return "";
-  }
-  for(unsigned i = 0; i < name.length(); i++){
-    char c = name[i];
-    bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' || c == ' ';
-    if(!ok){
-      return "";
-    }
-  }
-  return "/" + name;
 }
 
 // The SD bus is held (LCD released) for the whole upload: begin->chunks->end.
@@ -183,19 +304,45 @@ bool SDSTOR_writeBegin(String name){
     uploadErr = "SD card not ready";
     return false;
   }
-  uploadPath = sanitizeName(name);
-  if(uploadPath.length() == 0){
+  String path = sanitizeName(name);
+  if(path.length() == 0){
     uploadErr = "Invalid file name: '" + name + "'";
     return false;
   }
+
+  uploadBaseName = path.substring(1);
+  uploadPartBytes = 0;
+  uploadTotalBytes = 0;
+  uploadPartIndex = 0;
+
   LCD_busRelease();
-  if(SD.exists(uploadPath)){
-    SD.remove(uploadPath);
-  }
-  uploadFile = SD.open(uploadPath, FILE_WRITE);
+  removeLogicalFile(uploadBaseName);   // drop any previous version, split or not
+  uploadFile = SD.open(path, FILE_WRITE);
   if(!uploadFile){
     LCD_busAcquire();
-    uploadErr = "Cannot open " + uploadPath + " for write";
+    uploadErr = "Cannot open " + path + " for write";
+    return false;
+  }
+  return true;
+}
+
+// Closes the current plain/part file and opens the next one, promoting the
+// plain file to hidden part 1 the first time a file outgrows the cap.
+static bool rollToNextPart(void){
+  uploadFile.flush();
+  uploadFile.close();
+
+  if(uploadPartIndex == 0){
+    SD.rename("/" + uploadBaseName, partPath(uploadBaseName, 1));
+    uploadPartIndex = 1;
+  }
+
+  uploadPartIndex++;
+  String next = partPath(uploadBaseName, uploadPartIndex);
+  uploadFile = SD.open(next, FILE_WRITE);
+  uploadPartBytes = 0;
+  if(!uploadFile){
+    uploadErr = "Cannot open " + next + " for write";
     return false;
   }
   return true;
@@ -205,10 +352,29 @@ bool SDSTOR_writeChunk(const uint8_t* buf, size_t len){
   if(!uploadFile){
     return false;
   }
-  size_t wrote = uploadFile.write(buf, len);
-  if(wrote != len){
-    uploadErr = "SD write failed (wrote " + String(wrote) + " of " + String(len) + ")";
-    return false;
+
+  size_t offset = 0;
+  while(offset < len){
+    uint64_t remaining = SD_PART_MAX_BYTES - uploadPartBytes;
+    size_t want = len - offset;
+    if((uint64_t)want > remaining){
+      want = (size_t)remaining;
+    }
+    if(want > 0){
+      size_t wrote = uploadFile.write(buf + offset, want);
+      if(wrote != want){
+        uploadErr = "SD write failed (wrote " + String(wrote) + " of " + String(want) + ")";
+        return false;
+      }
+      uploadPartBytes += wrote;
+      uploadTotalBytes += wrote;
+      offset += wrote;
+    }
+    if(uploadPartBytes >= SD_PART_MAX_BYTES && offset < len){
+      if(!rollToNextPart()){
+        return false;
+      }
+    }
   }
   return true;
 }
@@ -219,6 +385,18 @@ bool SDSTOR_writeEnd(void){
   }
   uploadFile.flush();
   uploadFile.close();
+
+  if(uploadPartIndex > 0){
+    // File was split: the manifest is only written now that the final total
+    // is known, so an interrupted upload never leaves a manifest behind
+    // pointing at an incomplete part run.
+    File mf = SD.open(manifestPath(uploadBaseName), FILE_WRITE);
+    if(mf){
+      mf.println(String((unsigned long long)uploadTotalBytes));
+      mf.close();
+    }
+  }
+
   LCD_busAcquire();
   return true;
 }
@@ -232,7 +410,7 @@ bool SDSTOR_delete(String name){
     return false;
   }
   LCD_busRelease();
-  bool ok = SD.exists(path) && SD.remove(path);
+  bool ok = removeLogicalFile(path.substring(1));
   LCD_busAcquire();
   return ok;
 }
@@ -240,7 +418,7 @@ bool SDSTOR_delete(String name){
 void SDSTOR_writeAbort(void){
   if(uploadFile){
     uploadFile.close();
-    SD.remove(uploadPath);
+    removeLogicalFile(uploadBaseName);
     LCD_busAcquire();
   }
 }

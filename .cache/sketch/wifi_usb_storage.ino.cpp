@@ -22,9 +22,9 @@ String MAIN_getStatusMsg(void);
 static void display_ap_info(void);
 #line 44 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 static void display_station_info(String ip);
-#line 57 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 59 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void setup(void);
-#line 67 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 69 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void loop(void);
 #line 15 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void MAIN_setStatusMsg(String msg){
@@ -59,13 +59,15 @@ static void display_ap_info(void)
 static void display_station_info(String ip)
 {
   LCD_clear();
+  LCD_setFont(Font9pt);
   LCD_color(C_YELLOW);
-  LCD_write("\nConnected SSID:\n");
+  LCD_write("\n\nConnected SSID:\n");
   LCD_color(C_WHITE);
   LCD_write(WIFIC_getStSSID());
   LCD_color(C_YELLOW);
-  LCD_write("\nIP:");
+  LCD_write("\n\nIP: ");
   LCD_color(C_WHITE);
+  LCD_setFont(Font12pt);
   LCD_write(ip);
 }
 

@@ -45,4 +45,9 @@
 #define SD_CS             4
 #define SD_SPI_FREQ       20000000
 
+// FAT32 caps a single file at 4GiB-1. Logical files bigger than this are
+// transparently split into hidden numbered part files plus a manifest (see
+// sd_storage.cpp); this cap is kept comfortably below the hard limit.
+#define SD_PART_MAX_BYTES ((uint64_t)4000000000ULL)
+
 #endif
