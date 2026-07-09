@@ -81,25 +81,54 @@ bool SDSTOR_isReady(void){
 }
 
 // --- Split-file layout for logical files bigger than SD_PART_MAX_BYTES ---
-// A logical file "name" that never exceeds the cap is stored exactly as
-// before: a single plain file "/name". One that grows past the cap during
-// upload is transparently split into hidden part files "/.name.001",
-// "/.name.002", ... plus a hidden manifest "/.name.manifest" holding the
-// total byte count. Anything starting with '.' is considered internal and
-// is skipped by the listing (see SDSTOR_list()).
+// A logical file "name" in folder "dirPrefix" that never exceeds the cap is
+// stored exactly as before: a single plain file "<dirPrefix>/name". One that
+// grows past the cap during upload is transparently split into hidden part
+// files "<dirPrefix>/.name.001", "<dirPrefix>/.name.002", ... plus a hidden
+// manifest "<dirPrefix>/.name.manifest" holding the total byte count.
+// Anything starting with '.' is considered internal and is skipped by the
+// listing (see SDSTOR_list()). "dirPrefix" is "" for root, or "/Sub/Dir"
+// otherwise - always produced by sanitizeDir() below, never taken raw.
 #define SD_MANIFEST_SUFFIX ".manifest"
 
-static String partPath(const String& baseName, int idx){
+static String partPath(const String& dirPrefix, const String& baseName, int idx){
   char suffix[8];
   snprintf(suffix, sizeof(suffix), "%03d", idx);
-  return "/." + baseName + "." + String(suffix);
+  return dirPrefix + "/." + baseName + "." + String(suffix);
 }
 
-static String manifestPath(const String& baseName){
-  return "/." + baseName + SD_MANIFEST_SUFFIX;
+static String manifestPath(const String& dirPrefix, const String& baseName){
+  return dirPrefix + "/." + baseName + SD_MANIFEST_SUFFIX;
 }
 
-// Sanitize to a safe root-level path. Returns "" if invalid.
+// Cleans one path segment down to a safe set of characters, and rejects "."
+// and ".." (which would otherwise pass the character whitelist since '.' is
+// allowed) so a directory path can never be built that escapes root. Returns
+// "" if the segment is invalid or empty after cleaning.
+static String sanitizeSegment(String seg){
+  if(seg == "." || seg == ".."){
+    return "";
+  }
+  if(seg.length() > 255){   // FatFs long-filename cap (FF_LFN_BUF in ffconf.h)
+    seg = seg.substring(0, 255);
+  }
+  String cleaned;
+  for(unsigned i = 0; i < seg.length(); i++){
+    char c = seg[i];
+    bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' || c == ' ';
+    if(ok){
+      cleaned += c;
+    }
+  }
+  if(cleaned.length() == 0 || cleaned == "." || cleaned == ".."){
+    return "";
+  }
+  return cleaned;
+}
+
+// Sanitize a single file/folder leaf name (no path separators). Returns ""
+// if invalid.
 static String sanitizeName(String name){
   int slash = name.lastIndexOf('/');
   if(slash >= 0){
@@ -109,39 +138,55 @@ static String sanitizeName(String name){
   if(slash >= 0){
     name = name.substring(slash + 1);
   }
-  if(name.length() == 0 || name.length() > 64){
-    return "";
-  }
-  for(unsigned i = 0; i < name.length(); i++){
-    char c = name[i];
-    bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-              (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' || c == ' ';
-    if(!ok){
-      return "";
+  return sanitizeSegment(name);
+}
+
+// Turns a client-supplied relative directory ("" for root, or e.g.
+// "Photos/2024") into a safe absolute prefix ("" for root, "/Photos/2024"
+// otherwise). Each segment is independently sanitized; stray leading/
+// trailing/doubled slashes are simply skipped over. Returns false if any
+// non-empty segment is invalid, in which case outPrefix is left as "".
+static bool sanitizeDir(const String& dir, String& outPrefix){
+  outPrefix = "";
+  int start = 0;
+  while(start <= (int)dir.length()){
+    int slash = dir.indexOf('/', start);
+    String seg = (slash < 0) ? dir.substring(start) : dir.substring(start, slash);
+    if(seg.length() > 0){
+      String cleaned = sanitizeSegment(seg);
+      if(cleaned.length() == 0){
+        outPrefix = "";
+        return false;
+      }
+      outPrefix += "/" + cleaned;
     }
+    if(slash < 0){
+      break;
+    }
+    start = slash + 1;
   }
-  return "/" + name;
+  return true;
 }
 
 // Deletes a logical file regardless of how it's stored: a single plain file,
 // or - for anything that outgrew SD_PART_MAX_BYTES during upload - a
 // manifest plus a run of hidden numbered part files. Returns true if
 // anything existed to delete. Caller holds the SD bus.
-static bool removeLogicalFile(const String& baseName){
+static bool removeLogicalFile(const String& dirPrefix, const String& baseName){
   bool existed = false;
 
-  String plain = "/" + baseName;
+  String plain = dirPrefix + "/" + baseName;
   if(SD.exists(plain)){
     SD.remove(plain);
     existed = true;
   }
 
-  String mPath = manifestPath(baseName);
+  String mPath = manifestPath(dirPrefix, baseName);
   if(SD.exists(mPath)){
     SD.remove(mPath);
     existed = true;
     for(int i = 1; ; i++){
-      String p = partPath(baseName, i);
+      String p = partPath(dirPrefix, baseName, i);
       if(!SD.exists(p)){
         break;
       }
@@ -152,18 +197,49 @@ static bool removeLogicalFile(const String& baseName){
   return existed;
 }
 
-// Return root-level file names joined with '|', each as "name:size". Split
-// files are reported once, under their logical name, with their combined size.
-String SDSTOR_list(void){
+// Recursively removes a folder and everything inside it. Caller holds the SD bus.
+static bool removeDirRecursive(const String& path){
+  File dir = SD.open(path);
+  if(!dir){
+    return false;
+  }
+  if(!dir.isDirectory()){
+    dir.close();
+    return false;
+  }
+  for(File entry = dir.openNextFile(); entry; entry = dir.openNextFile()){
+    String n = String(entry.name());
+    bool isDir = entry.isDirectory();
+    entry.close();
+    String childPath = path + "/" + n;
+    if(isDir){
+      removeDirRecursive(childPath);
+    }else{
+      SD.remove(childPath);
+    }
+  }
+  dir.close();
+  return SD.rmdir(path);
+}
+
+// Return the names in "dir" joined with '|', each as "name:size" for a file
+// or "name/:0" for a subfolder. Split files are reported once, under their
+// logical name, with their combined size.
+String SDSTOR_list(String dir){
   String result = "";
   if(!cardReady){
     return result;
   }
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
+    return result;
+  }
+  String openPath = dirPrefix.length() ? dirPrefix : "/";
 
   LCD_busRelease();
 
   // Pass 1: split files, represented by their hidden manifest.
-  File root = SD.open("/");
+  File root = SD.open(openPath);
   if(root){
     for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
       String n = String(entry.name());
@@ -188,7 +264,7 @@ String SDSTOR_list(void){
   }
 
   // Pass 2: plain files (anything starting with '.' is an internal part/manifest).
-  root = SD.open("/");
+  root = SD.open(openPath);
   if(root){
     for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
       String n = String(entry.name());
@@ -203,16 +279,51 @@ String SDSTOR_list(void){
     root.close();
   }
 
+  // Pass 3: subfolders.
+  root = SD.open(openPath);
+  if(root){
+    for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
+      String n = String(entry.name());
+      if(entry.isDirectory() && !(n.length() > 0 && n[0] == '.')){
+        if(result.length() > 0){
+          result += "|";
+        }
+        result += n + "/:0";
+      }
+      entry.close();
+    }
+    root.close();
+  }
+
   LCD_busAcquire();
 
   return result;
+}
+
+// Creates a subfolder "name" inside "dir".
+bool SDSTOR_mkdir(String dir, String name){
+  if(!cardReady){
+    return false;
+  }
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
+    return false;
+  }
+  String leaf = sanitizeName(name);
+  if(leaf.length() == 0){
+    return false;
+  }
+  LCD_busRelease();
+  bool ok = SD.mkdir(dirPrefix + "/" + leaf);
+  LCD_busAcquire();
+  return ok;
 }
 
 // Streams the hidden numbered parts of a split logical file back to back.
 // The combined size can exceed what WebServer's 32-bit setContentLength()
 // can express, so this uses chunked transfer encoding instead of a fixed
 // Content-Length.
-static bool sendSplitFile(const String& baseName, const String& displayName, WebServer* server){
+static bool sendSplitFile(const String& dirPrefix, const String& baseName, const String& displayName, WebServer* server){
   server->sendHeader("Content-Disposition", "attachment; filename=\"" + displayName + "\"");
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/octet-stream", "");
@@ -220,7 +331,7 @@ static bool sendSplitFile(const String& baseName, const String& displayName, Web
   static uint8_t buf[512];
   for(int i = 1; ; i++){
     LCD_busRelease();
-    File f = SD.open(partPath(baseName, i));
+    File f = SD.open(partPath(dirPrefix, baseName, i));
     LCD_busAcquire();
     if(!f){
       break;   // no more parts
@@ -240,20 +351,26 @@ static bool sendSplitFile(const String& baseName, const String& displayName, Web
 }
 
 // Stream a file to an HTTP client as application/octet-stream, download-as-attachment.
-bool SDSTOR_sendRaw(String name, WebServer* server){
+bool SDSTOR_sendRaw(String dir, String name, WebServer* server){
   if(!cardReady){
     return false;
   }
-
-  String path = name.startsWith("/") ? name : ("/" + name);
-  String baseName = path.substring(1);
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
+    return false;
+  }
+  String baseName = sanitizeName(name);
+  if(baseName.length() == 0){
+    return false;
+  }
+  String path = dirPrefix + "/" + baseName;
 
   LCD_busRelease();
-  bool isSplit = SD.exists(manifestPath(baseName));
+  bool isSplit = SD.exists(manifestPath(dirPrefix, baseName));
   LCD_busAcquire();
 
   if(isSplit){
-    return sendSplitFile(baseName, name, server);
+    return sendSplitFile(dirPrefix, baseName, name, server);
   }
 
   LCD_busRelease();
@@ -284,6 +401,7 @@ bool SDSTOR_sendRaw(String name, WebServer* server){
 
 // --- Incremental upload to SD ---
 static File uploadFile;
+static String uploadDirPrefix;    // absolute folder prefix ("" for root), resolved at writeBegin
 static String uploadBaseName;     // logical name, no leading slash (e.g. "foo.bin")
 static uint64_t uploadPartBytes;  // bytes written to the currently open plain/part file
 static uint64_t uploadTotalBytes; // bytes written overall, across all parts
@@ -297,25 +415,32 @@ String SDSTOR_lastError(void){
 // The SD bus is held (LCD released) for the whole upload: begin->chunks->end.
 // Re-acquiring the LCD bus between chunks re-latches SPI on the C6 and silently
 // corrupts the in-progress SD write.
-bool SDSTOR_writeBegin(String name){
+bool SDSTOR_writeBegin(String dir, String name){
   uploadErr = "";
   if(!cardReady){
     uploadErr = "SD card not ready";
     return false;
   }
-  String path = sanitizeName(name);
-  if(path.length() == 0){
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
+    uploadErr = "Invalid folder: '" + dir + "'";
+    return false;
+  }
+  String baseName = sanitizeName(name);
+  if(baseName.length() == 0){
     uploadErr = "Invalid file name: '" + name + "'";
     return false;
   }
 
-  uploadBaseName = path.substring(1);
+  uploadDirPrefix = dirPrefix;
+  uploadBaseName = baseName;
   uploadPartBytes = 0;
   uploadTotalBytes = 0;
   uploadPartIndex = 0;
 
+  String path = dirPrefix + "/" + baseName;
   LCD_busRelease();
-  removeLogicalFile(uploadBaseName);   // drop any previous version, split or not
+  removeLogicalFile(uploadDirPrefix, uploadBaseName);   // drop any previous version, split or not
   uploadFile = SD.open(path, FILE_WRITE);
   if(!uploadFile){
     LCD_busAcquire();
@@ -332,12 +457,12 @@ static bool rollToNextPart(void){
   uploadFile.close();
 
   if(uploadPartIndex == 0){
-    SD.rename("/" + uploadBaseName, partPath(uploadBaseName, 1));
+    SD.rename(uploadDirPrefix + "/" + uploadBaseName, partPath(uploadDirPrefix, uploadBaseName, 1));
     uploadPartIndex = 1;
   }
 
   uploadPartIndex++;
-  String next = partPath(uploadBaseName, uploadPartIndex);
+  String next = partPath(uploadDirPrefix, uploadBaseName, uploadPartIndex);
   uploadFile = SD.open(next, FILE_WRITE);
   uploadPartBytes = 0;
   if(!uploadFile){
@@ -389,7 +514,7 @@ bool SDSTOR_writeEnd(void){
     // File was split: the manifest is only written now that the final total
     // is known, so an interrupted upload never leaves a manifest behind
     // pointing at an incomplete part run.
-    File mf = SD.open(manifestPath(uploadBaseName), FILE_WRITE);
+    File mf = SD.open(manifestPath(uploadDirPrefix, uploadBaseName), FILE_WRITE);
     if(mf){
       mf.println(String((unsigned long long)uploadTotalBytes));
       mf.close();
@@ -400,16 +525,144 @@ bool SDSTOR_writeEnd(void){
   return true;
 }
 
-bool SDSTOR_delete(String name){
+// Deletes a file or a folder named "name" inside "dir". A folder is removed
+// recursively, along with everything inside it.
+bool SDSTOR_delete(String dir, String name){
   if(!cardReady){
     return false;
   }
-  String path = sanitizeName(name);
-  if(path.length() == 0){
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
     return false;
   }
+  String baseName = sanitizeName(name);
+  if(baseName.length() == 0){
+    return false;
+  }
+
   LCD_busRelease();
-  bool ok = removeLogicalFile(path.substring(1));
+  String path = dirPrefix + "/" + baseName;
+  File entry = SD.open(path);
+  bool isDir = entry && entry.isDirectory();
+  if(entry){
+    entry.close();
+  }
+  bool ok = isDir ? removeDirRecursive(path) : removeLogicalFile(dirPrefix, baseName);
+  LCD_busAcquire();
+  return ok;
+}
+
+// Moves a file named "name" from "srcDir" into "destDir". Fails (no changes
+// made) if destDir doesn't exist or already has an entry called "name" -
+// this never overwrites, unlike upload. SD.rename() is metadata-only on
+// FAT, so this doesn't copy file data even for a multi-part split file.
+bool SDSTOR_move(String srcDir, String name, String destDir){
+  if(!cardReady){
+    return false;
+  }
+  String srcPrefix, destPrefix;
+  if(!sanitizeDir(srcDir, srcPrefix) || !sanitizeDir(destDir, destPrefix)){
+    return false;
+  }
+  String baseName = sanitizeName(name);
+  if(baseName.length() == 0){
+    return false;
+  }
+  if(srcPrefix == destPrefix){
+    return true;   // already there
+  }
+
+  LCD_busRelease();
+
+  File destDirFile = SD.open(destPrefix.length() ? destPrefix : "/");
+  bool destOk = destDirFile && destDirFile.isDirectory();
+  if(destDirFile){
+    destDirFile.close();
+  }
+  if(!destOk){
+    LCD_busAcquire();
+    return false;
+  }
+
+  String destPlain = destPrefix + "/" + baseName;
+  if(SD.exists(destPlain) || SD.exists(manifestPath(destPrefix, baseName))){
+    LCD_busAcquire();
+    return false;   // destination name already taken
+  }
+
+  bool ok;
+  if(SD.exists(manifestPath(srcPrefix, baseName))){
+    ok = SD.rename(manifestPath(srcPrefix, baseName), manifestPath(destPrefix, baseName));
+    for(int i = 1; ok; i++){
+      String srcPart = partPath(srcPrefix, baseName, i);
+      if(!SD.exists(srcPart)){
+        break;
+      }
+      ok = SD.rename(srcPart, partPath(destPrefix, baseName, i));
+    }
+  }else{
+    String srcPlain = srcPrefix + "/" + baseName;
+    ok = SD.exists(srcPlain) && SD.rename(srcPlain, destPlain);
+  }
+
+  LCD_busAcquire();
+  return ok;
+}
+
+// Renames a file or folder "oldName" to "newName", both inside "dir". Fails
+// (no changes made) if "newName" is already taken. A folder rename is a
+// single metadata-only SD.rename() - its contents are addressed relative to
+// it, so they're unaffected. A file rename renames the manifest and every
+// numbered part too, same as SDSTOR_move().
+bool SDSTOR_rename(String dir, String oldName, String newName){
+  if(!cardReady){
+    return false;
+  }
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
+    return false;
+  }
+  String oldBase = sanitizeName(oldName);
+  String newBase = sanitizeName(newName);
+  if(oldBase.length() == 0 || newBase.length() == 0){
+    return false;
+  }
+  if(oldBase == newBase){
+    return true;   // no-op
+  }
+
+  LCD_busRelease();
+
+  String oldPath = dirPrefix + "/" + oldBase;
+  String newPath = dirPrefix + "/" + newBase;
+
+  File entry = SD.open(oldPath);
+  bool isDir = entry && entry.isDirectory();
+  if(entry){
+    entry.close();
+  }
+
+  if(SD.exists(newPath) || SD.exists(manifestPath(dirPrefix, newBase))){
+    LCD_busAcquire();
+    return false;   // destination name already taken
+  }
+
+  bool ok;
+  if(isDir){
+    ok = SD.rename(oldPath, newPath);
+  }else if(SD.exists(manifestPath(dirPrefix, oldBase))){
+    ok = SD.rename(manifestPath(dirPrefix, oldBase), manifestPath(dirPrefix, newBase));
+    for(int i = 1; ok; i++){
+      String oldPart = partPath(dirPrefix, oldBase, i);
+      if(!SD.exists(oldPart)){
+        break;
+      }
+      ok = SD.rename(oldPart, partPath(dirPrefix, newBase, i));
+    }
+  }else{
+    ok = SD.exists(oldPath) && SD.rename(oldPath, newPath);
+  }
+
   LCD_busAcquire();
   return ok;
 }
@@ -417,7 +670,7 @@ bool SDSTOR_delete(String name){
 void SDSTOR_writeAbort(void){
   if(uploadFile){
     uploadFile.close();
-    removeLogicalFile(uploadBaseName);
+    removeLogicalFile(uploadDirPrefix, uploadBaseName);
     LCD_busAcquire();
   }
 }

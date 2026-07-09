@@ -129,7 +129,7 @@ static void fileList(void){
   if(!requireSD()){
     return;
   }
-  webServer->send(200, "text/plain", SDSTOR_list());
+  webServer->send(200, "text/plain", SDSTOR_list(webServer->arg("dir")));
 }
 
 static void downloadFile(void){
@@ -137,7 +137,7 @@ static void downloadFile(void){
     return;
   }
   String name = webServer->arg("name");
-  if(name.length() == 0 || !SDSTOR_sendRaw(name, webServer)){
+  if(name.length() == 0 || !SDSTOR_sendRaw(webServer->arg("dir"), name, webServer)){
     webServer->send(404, "text/plain", "File not found");
   }
 }
@@ -147,8 +147,45 @@ static void deleteFile(void){
     return;
   }
   String name = webServer->arg("name");
-  if(name.length() == 0 || !SDSTOR_delete(name)){
+  if(name.length() == 0 || !SDSTOR_delete(webServer->arg("dir"), name)){
     webServer->send(400, "text/plain", "Delete failed");
+    return;
+  }
+  webServer->send(200, "text/plain", "OK");
+}
+
+static void moveFile(void){
+  if(!requireSD()){
+    return;
+  }
+  String name = webServer->arg("name");
+  if(name.length() == 0 || !SDSTOR_move(webServer->arg("dir"), name, webServer->arg("destDir"))){
+    webServer->send(400, "text/plain", "Move failed");
+    return;
+  }
+  webServer->send(200, "text/plain", "OK");
+}
+
+static void renameHandler(void){
+  if(!requireSD()){
+    return;
+  }
+  String name = webServer->arg("name");
+  String newName = webServer->arg("newName");
+  if(name.length() == 0 || newName.length() == 0 || !SDSTOR_rename(webServer->arg("dir"), name, newName)){
+    webServer->send(400, "text/plain", "Rename failed");
+    return;
+  }
+  webServer->send(200, "text/plain", "OK");
+}
+
+static void mkdirHandler(void){
+  if(!requireSD()){
+    return;
+  }
+  String name = webServer->arg("name");
+  if(name.length() == 0 || !SDSTOR_mkdir(webServer->arg("dir"), name)){
+    webServer->send(400, "text/plain", "Create folder failed");
     return;
   }
   webServer->send(200, "text/plain", "OK");
@@ -164,7 +201,7 @@ static void uploadFile_handler(void){
   }
   HTTPUpload& up = webServer->upload();
   if(up.status == UPLOAD_FILE_START){
-    uploadOk = SDSTOR_writeBegin(up.filename);
+    uploadOk = SDSTOR_writeBegin(webServer->arg("dir"), up.filename);
   }else if(up.status == UPLOAD_FILE_WRITE){
     if(uploadOk){
       uploadOk = SDSTOR_writeChunk(up.buf, up.currentSize);
@@ -241,6 +278,9 @@ void HTTP_SERVER_init(void){
   webServer->on("/download", HTTP_GET, downloadFile);
   webServer->on("/upload", HTTP_POST, uploadDone, uploadFile_handler);
   webServer->on("/delete", HTTP_GET, deleteFile);
+  webServer->on("/mkdir", HTTP_GET, mkdirHandler);
+  webServer->on("/move", HTTP_GET, moveFile);
+  webServer->on("/rename", HTTP_GET, renameHandler);
   webServer->on("/aplist", HTTP_GET, apList);
   webServer->on("/api/sdstatus", HTTP_GET, sdStatus);
   webServer->on("/eject", HTTP_GET, ejectSD);

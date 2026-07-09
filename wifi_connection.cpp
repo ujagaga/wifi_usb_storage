@@ -18,7 +18,7 @@
 // -----------------------------------------------------------------------------
 // Local variables
 // -----------------------------------------------------------------------------
-static char myApName[32] = {0};         // AP name
+static char myApName[24] = {0};         // AP name
 static String st_ssid = "";             // Saved SSID
 static String st_pass = "";             // Saved password
 static IPAddress stationIP;
@@ -117,7 +117,7 @@ static void APMode(void) {
     String mac = WiFi.macAddress();
     mac.replace(":", "");
     String apName = String(AP_NAME_PREFIX) + mac;
-    apName.toCharArray(myApName, 32);
+    apName.toCharArray(myApName, sizeof(myApName));
 
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(myApName, AP_PASS);

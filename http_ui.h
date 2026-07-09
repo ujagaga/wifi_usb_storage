@@ -57,6 +57,8 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   .btn.accent{ background:#ff5a3c; }
   .btn.accent:hover{ background:#ff6f55; }
   .ghead{ margin:0 0 .8rem; font-size:.95rem; color:#cfd4de; }
+  #crumb{ background:#11151c; border-radius:.55rem; padding:.6rem .8rem; margin-bottom:.8rem;
+    font-size:.85rem; color:#9db4d0; }
   #status{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:50; max-width:90%;
     padding:.65rem 1.1rem; border-radius:.6rem; font-size:.85rem; display:none;
     box-shadow:0 6px 18px rgba(0,0,0,.45); }
@@ -66,12 +68,19 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   table.files{ width:100%; border-collapse:collapse; font-size:.85rem; }
   table.files th, table.files td{ text-align:left; padding:.5rem .4rem; border-bottom:1px solid #232b37; }
   table.files th{ color:#8b93a3; font-weight:600; }
+  table.files .ficon{ display:inline-block; vertical-align:-2px; margin-right:.4rem; color:#e0b357; }
   table.files td.sz{ color:#8b93a3; white-space:nowrap; }
-  table.files td.act{ white-space:nowrap; text-align:right; }
-  table.files a.dl{ margin-right:.6rem; }
-  .del{ border:1px solid #ff5a3c; border-radius:.4rem; background:none; color:#ff5a3c;
-    font-size:.8rem; padding:.2rem .5rem; cursor:pointer; }
-  .del:hover{ background:#ff5a3c; color:#fff; }
+  #ctxmenu{ position:fixed; display:none; background:#1b212b; border:1px solid #232b37;
+    border-radius:.5rem; box-shadow:0 6px 18px rgba(0,0,0,.45); z-index:60; min-width:140px; padding:.3rem; }
+  #ctxmenu button{ display:block; width:100%; text-align:left; border:0; background:none; color:#e6e9ef;
+    font-size:.85rem; padding:.5rem .7rem; border-radius:.35rem; cursor:pointer; }
+  #ctxmenu button:hover{ background:#2a3340; }
+  #ctxmenu button.danger{ color:#ff5a3c; }
+  #ctxmenu button.danger:hover{ background:#ff5a3c; color:#fff; }
+  #movebox{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:70; }
+  #movebox .card{ max-width:360px; margin:10vh auto; }
+  .mvrow{ padding:.45rem .3rem; cursor:pointer; border-radius:.35rem; font-size:.85rem; }
+  .mvrow:hover{ background:#2a3340; }
 </style>
 <div class="contain">
   <div class="center_div">
@@ -136,24 +145,62 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
     <div class="btn-row">
       <label class="btn accent" for="up">Upload file</label>
       <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
+      <button class="btn" onclick="newFolder();">New folder</button>
       <button class="btn" onclick="ejectSD();">Eject SD card</button>
       <button class="btn" onclick="formatSD();">Format SD card</button>
     </div>
   </div>
   <div class="card">
-    <p class="ghead">Files on SD card</p>
+    <div id="crumb"></div>
     <table class="files"><tbody id="flist"></tbody></table>
   </div>
 </div>
+<div id="ctxmenu"></div>
+<div id="movebox" onclick="if(event.target===this){ closeMoveDialog(); }">
+  <div class="card">
+    <p id="movetitle" style="margin:0 0 .6rem;font-size:.9rem;"></p>
+    <div id="movepath" style="color:#9db4d0;font-size:.8rem;margin:0 0 .6rem;"></div>
+    <div id="movelist" style="max-height:40vh;overflow-y:auto;margin-bottom:.8rem;"></div>
+    <div class="btn-row">
+      <button class="btn accent" onclick="doMove();">Move here</button>
+      <button class="btn" onclick="closeMoveDialog();">Cancel</button>
+    </div>
+  </div>
+</div>
 <script>
+  var currentDir = '';
+  var FOLDER_ICON_SVG = '<svg viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M64 448l384 0c35.3 0 64-28.7 64-64l0-240c0-35.3-28.7-64-64-64L298.7 80c-6.9 0-13.7-2.2-19.2-6.4L241.1 44.8C230 36.5 216.5 32 202.7 32L64 32C28.7 32 0 60.7 0 96L0 384c0 35.3 28.7 64 64 64z"/></svg>';
   function fmtSize(n){
     if(n<1024){ return n+' B'; }
     if(n<1024*1024){ return (n/1024).toFixed(1)+' KB'; }
     return (n/1024/1024).toFixed(1)+' MB';
   }
+  function navTo(dir){
+    currentDir = dir;
+    loadFiles();
+  }
+  function renderCrumb(){
+    var crumb=document.getElementById('crumb');
+    crumb.innerHTML='';
+    var home=document.createElement('a');
+    home.href='#'; home.textContent='Home';
+    home.onclick=function(e){ e.preventDefault(); navTo(''); };
+    crumb.appendChild(home);
+    if(currentDir){
+      var acc='';
+      currentDir.split('/').forEach(function(p){
+        acc = acc ? acc+'/'+p : p;
+        crumb.appendChild(document.createTextNode(' / '));
+        var a=document.createElement('a');
+        a.href='#'; a.textContent=p;
+        a.onclick=function(e){ e.preventDefault(); navTo(acc); };
+        crumb.appendChild(a);
+      });
+    }
+  }
   function deleteFile(name){
     if(!confirm('Delete ' + name + '?')){ return; }
-    fetch('/delete?name=' + encodeURIComponent(name)).then(function(r){
+    fetch('/delete?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name)).then(function(r){
       return r.text().then(function(t){
         if(r.ok){
           showStatus('Deleted ' + name, 'ok');
@@ -164,49 +211,196 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       });
     }).catch(function(e){ showStatus('Delete error: ' + e.message, 'err'); });
   }
+  function renamePrompt(name){
+    var newName=prompt('New name:', name);
+    if(!newName || newName===name){ return; }
+    fetch('/rename?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name) + '&newName=' + encodeURIComponent(newName)).then(function(r){
+      return r.text().then(function(t){
+        if(r.ok){
+          showStatus('Renamed to ' + newName, 'ok');
+          loadFiles();
+        }else{
+          showStatus('Rename failed: ' + t, 'err');
+        }
+      });
+    }).catch(function(e){ showStatus('Rename error: ' + e.message, 'err'); });
+  }
+  function newFolder(){
+    var name=prompt('Folder name:');
+    if(!name){ return; }
+    fetch('/mkdir?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name)).then(function(r){
+      return r.text().then(function(t){
+        if(r.ok){
+          showStatus('Folder created', 'ok');
+          loadFiles();
+        }else{
+          showStatus('Create folder failed: ' + t, 'err');
+        }
+      });
+    }).catch(function(e){ showStatus('Create folder error: ' + e.message, 'err'); });
+  }
   function ejectSD(){
+    if(!confirm('Eject SD card? Make sure no upload is in progress.')){ return; }
     fetch('/eject').then(function(r){return r.text();}).then(function(t){
       showStatus(t, 'ok');
       setTimeout(function(){ location.reload(); }, 800);
     }).catch(function(e){ showStatus('Eject error: ' + e.message, 'err'); });
   }
   function loadFiles(){
-    fetch('/api/filelist').then(function(r){return r.text();}).then(function(t){
-      var entries=t.split('|').filter(function(s){return s.length>0;});
-      var tbody=document.getElementById('flist');
-      tbody.innerHTML='';
-      entries.forEach(function(e){
+    renderCrumb();
+    fetch('/api/filelist?dir=' + encodeURIComponent(currentDir)).then(function(r){return r.text();}).then(function(t){
+      var entries=t.split('|').filter(function(s){return s.length>0;}).map(function(e){
         var parts=e.split(':');
         var name=parts[0], size=parseInt(parts[1],10)||0;
+        var isDir=false;
+        if(name.length && name.charAt(name.length-1)==='/'){
+          isDir=true;
+          name=name.slice(0,-1);
+        }
+        return {name:name, size:size, isDir:isDir};
+      });
+      entries.sort(function(a, b){
+        if(a.isDir !== b.isDir){ return a.isDir ? -1 : 1; }
+        return a.name.localeCompare(b.name, undefined, {sensitivity:'base'});
+      });
+      var tbody=document.getElementById('flist');
+      tbody.innerHTML='';
+      entries.forEach(function(entry){
+        var name=entry.name, size=entry.size, isDir=entry.isDir;
         var tr=document.createElement('tr');
         var tdName=document.createElement('td');
-        tdName.textContent=name;
         var tdSize=document.createElement('td');
         tdSize.className='sz';
-        tdSize.textContent=fmtSize(size);
-        var tdAct=document.createElement('td');
-        tdAct.className='act';
-        var dl=document.createElement('a');
-        dl.className='dl'; dl.textContent='Download';
-        dl.href='/download?name=' + encodeURIComponent(name);
-        var del=document.createElement('button');
-        del.className='del'; del.textContent='Delete';
-        del.onclick=function(){ deleteFile(name); };
-        tdAct.appendChild(dl); tdAct.appendChild(del);
-        tr.appendChild(tdName); tr.appendChild(tdSize); tr.appendChild(tdAct);
+        if(isDir){
+          var icon=document.createElement('span');
+          icon.className='ficon';
+          icon.innerHTML=FOLDER_ICON_SVG;
+          tdName.appendChild(icon);
+          var fl=document.createElement('a');
+          fl.href='#'; fl.textContent=name;
+          fl.onclick=function(e){ e.preventDefault(); navTo(currentDir ? currentDir+'/'+name : name); };
+          tdName.appendChild(fl);
+          tdSize.textContent='Folder';
+        }else{
+          tdName.textContent=name;
+          tdSize.textContent=fmtSize(size);
+        }
+        tr.oncontextmenu=function(e){ e.preventDefault(); showCtxMenu(e.clientX, e.clientY, name, isDir); };
+        tr.appendChild(tdName); tr.appendChild(tdSize);
         tbody.appendChild(tr);
       });
       if(!entries.length){
-        tbody.innerHTML='<tr><td colspan="3" style="color:#8b93a3;">No files.</td></tr>';
+        tbody.innerHTML='<tr><td colspan="2" style="color:#8b93a3;">No files.</td></tr>';
       }
     });
+  }
+  function downloadFile(name){
+    window.location = '/download?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name);
+  }
+  function hideCtxMenu(){
+    document.getElementById('ctxmenu').style.display='none';
+  }
+  function showCtxMenu(x, y, name, isDir){
+    var menu=document.getElementById('ctxmenu');
+    menu.innerHTML='';
+    if(!isDir){
+      var dl=document.createElement('button');
+      dl.textContent='Download';
+      dl.onclick=function(){ hideCtxMenu(); downloadFile(name); };
+      menu.appendChild(dl);
+      var mv=document.createElement('button');
+      mv.textContent='Move';
+      mv.onclick=function(){ hideCtxMenu(); showMoveDialog(name); };
+      menu.appendChild(mv);
+    }
+    var rn=document.createElement('button');
+    rn.textContent='Rename';
+    rn.onclick=function(){ hideCtxMenu(); renamePrompt(name); };
+    menu.appendChild(rn);
+    var del=document.createElement('button');
+    del.className='danger'; del.textContent='Delete';
+    del.onclick=function(){ hideCtxMenu(); deleteFile(name); };
+    menu.appendChild(del);
+    menu.style.left=x+'px';
+    menu.style.top=y+'px';
+    menu.style.display='block';
+    var rect=menu.getBoundingClientRect();
+    if(rect.right>window.innerWidth){ menu.style.left=Math.max(0, window.innerWidth-rect.width)+'px'; }
+    if(rect.bottom>window.innerHeight){ menu.style.top=Math.max(0, window.innerHeight-rect.height)+'px'; }
+  }
+  document.addEventListener('click', hideCtxMenu);
+  var moveSrcDir='', moveName='', browseDir='';
+  function showMoveDialog(name){
+    moveSrcDir = currentDir;
+    moveName = name;
+    browseDir = currentDir;
+    document.getElementById('movetitle').textContent = "Move '" + name + "' to:";
+    document.getElementById('movebox').style.display = 'block';
+    loadMoveDirList();
+  }
+  function closeMoveDialog(){
+    document.getElementById('movebox').style.display = 'none';
+  }
+  function renderMoveCrumb(){
+    var el=document.getElementById('movepath');
+    el.innerHTML='';
+    var home=document.createElement('a');
+    home.href='#'; home.textContent='Home';
+    home.onclick=function(e){ e.preventDefault(); browseDir=''; loadMoveDirList(); };
+    el.appendChild(home);
+    if(browseDir){
+      var acc='';
+      browseDir.split('/').forEach(function(p){
+        acc = acc ? acc+'/'+p : p;
+        el.appendChild(document.createTextNode(' / '));
+        var a=document.createElement('a');
+        a.href='#'; a.textContent=p;
+        a.onclick=function(e){ e.preventDefault(); browseDir=acc; loadMoveDirList(); };
+        el.appendChild(a);
+      });
+    }
+  }
+  function loadMoveDirList(){
+    renderMoveCrumb();
+    fetch('/api/filelist?dir=' + encodeURIComponent(browseDir)).then(function(r){return r.text();}).then(function(t){
+      var entries=t.split('|').filter(function(s){return s.length>0;});
+      var list=document.getElementById('movelist');
+      list.innerHTML='';
+      var folders=entries.filter(function(e){
+        var n=e.split(':')[0];
+        return n.length && n.charAt(n.length-1)==='/';
+      }).map(function(e){ return e.split(':')[0].slice(0,-1); });
+      if(!folders.length){
+        list.innerHTML='<div style="color:#8b93a3;font-size:.8rem;padding:.4rem;">No subfolders here.</div>';
+        return;
+      }
+      folders.forEach(function(n){
+        var row=document.createElement('div');
+        row.className='mvrow'; row.textContent=n;
+        row.onclick=function(){ browseDir = browseDir ? browseDir+'/'+n : n; loadMoveDirList(); };
+        list.appendChild(row);
+      });
+    });
+  }
+  function doMove(){
+    fetch('/move?dir=' + encodeURIComponent(moveSrcDir) + '&name=' + encodeURIComponent(moveName) + '&destDir=' + encodeURIComponent(browseDir)).then(function(r){
+      return r.text().then(function(t){
+        closeMoveDialog();
+        if(r.ok){
+          showStatus('Moved ' + moveName, 'ok');
+          loadFiles();
+        }else{
+          showStatus('Move failed: ' + t, 'err');
+        }
+      });
+    }).catch(function(e){ closeMoveDialog(); showStatus('Move error: ' + e.message, 'err'); });
   }
   function uploadOne(file, label){
     return new Promise(function(resolve){
       var fd=new FormData();
       fd.append('f', file, file.name);
       showStatus(label + 'uploading ' + file.name + '...', 'info');
-      fetch('/upload', {method:'POST', body:fd}).then(function(rsp){
+      fetch('/upload?dir=' + encodeURIComponent(currentDir), {method:'POST', body:fd}).then(function(rsp){
         return rsp.text().then(function(t){
           if(rsp.ok){ resolve(true); }
           else{ showStatus('Upload failed: ' + t, 'err'); resolve(false); }
@@ -336,12 +530,16 @@ static const char API_HTML_1[] PROGMEM = R"(
   <p class="sub">Device IP, port 80. Action endpoints return <code>OK</code> or <code>400</code>.</p>
 
   <h2>File storage</h2>
+  <p class="sub">All endpoints below take an optional <code>dir</code> query param (relative folder path, e.g. <code>Photos/2024</code>; omit or leave empty for root).</p>
   <table>
     <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
-    <tr><td class="m">GET</td><td><code>/api/filelist</code></td><td>List files as <code>name:size</code> (| separated)</td></tr>
-    <tr><td class="m">GET</td><td><code>/download?name=NAME</code></td><td>Download a file from the SD card</td></tr>
-    <tr><td class="m">POST</td><td><code>/upload</code></td><td>Upload a file (multipart form field <code>f</code>)</td></tr>
-    <tr><td class="m">GET</td><td><code>/delete?name=NAME</code></td><td>Delete a file from the SD card</td></tr>
+    <tr><td class="m">GET</td><td><code>/api/filelist?dir=DIR</code></td><td>List files as <code>name:size</code> and folders as <code>name/:0</code> (| separated)</td></tr>
+    <tr><td class="m">GET</td><td><code>/download?dir=DIR&amp;name=NAME</code></td><td>Download a file from the SD card</td></tr>
+    <tr><td class="m">POST</td><td><code>/upload?dir=DIR</code></td><td>Upload a file (multipart form field <code>f</code>)</td></tr>
+    <tr><td class="m">GET</td><td><code>/delete?dir=DIR&amp;name=NAME</code></td><td>Delete a file, or a folder and everything inside it</td></tr>
+    <tr><td class="m">GET</td><td><code>/mkdir?dir=DIR&amp;name=NAME</code></td><td>Create a subfolder</td></tr>
+    <tr><td class="m">GET</td><td><code>/move?dir=DIR&amp;name=NAME&amp;destDir=DEST</code></td><td>Move a file into another folder; fails if a same-named file already exists there</td></tr>
+    <tr><td class="m">GET</td><td><code>/rename?dir=DIR&amp;name=NAME&amp;newName=NEW</code></td><td>Rename a file or folder; fails if NEW is already taken</td></tr>
   </table>
 
   <h2>Web UI &amp; config</h2>
