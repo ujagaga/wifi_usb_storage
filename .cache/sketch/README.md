@@ -32,8 +32,18 @@ and a small on-device status display.
   the station SSID/IP once connected.
 
 ### SD card storage
-- Files live in the SD card's root directory (no subfolders). Upload,
-  download, delete, and list them from the web UI or the HTTP API.
+- **Folders.** Create folders, navigate into them (breadcrumb trail at the
+  top of the file list), and upload/move files into whichever folder is
+  currently open. Nesting is unrestricted. Deleting a folder removes
+  everything inside it, recursively.
+- Upload, download, delete, move, and rename files (or folders) from the web
+  UI or the HTTP API. Moving or renaming onto an already-taken name fails
+  rather than silently overwriting.
+- `config.txt` holds the saved WiFi credentials and screen brightness (see
+  below) - it's a normal file, always sorted to the end of the file list and
+  shown in a distinct color so it's easy to recognize. Nothing stops it being
+  renamed/moved/deleted like any other file; doing so just means the device
+  falls back to RAM-only WiFi/brightness state until it's recreated.
 - **Hot-plug.** The card doesn't need to be present at boot, and can be
   inserted or removed while the device is running - the web UI updates
   itself automatically (polls status every few seconds and reloads).
@@ -55,32 +65,60 @@ and a small on-device status display.
   deletion all work on the one logical file name and its true combined size.
 
 ### Web UI
-- `/` - main page: station IP, file list with download/delete, upload
-  (multi-file), Eject, and Format buttons. When no SD card is present, or
-  it's faulty, this area is replaced with the relevant message instead.
+- `/` - main page: station IP, folder-aware file list (breadcrumb trail,
+  New Folder button), upload (multi-file, into whichever folder is open),
+  Eject, and Format buttons. Folders sort first, then files alphabetically,
+  with `config.txt` always last and in a distinct color. When no SD card is
+  present, or it's faulty, this area is replaced with the relevant message
+  instead.
+  - **Right-click (or long-press) a row** for a context menu: Download,
+    Preview (images/text only), Move, Rename, Delete. Left-clicking a
+    previewable file's name opens the preview directly.
+  - **Preview panel** on the right (drops below the file list on narrow
+    screens): renders images (`jpg jpeg png gif svg webp bmp ico`) or the
+    first 8KB of text-like files (`txt log csv json md ini cfg yaml yml
+    xml`) inline. Has Previous/Next (cycles through previewable files in the
+    current folder) and a Fullscreen toggle that keeps those controls
+    visible.
+  - **Move** opens a folder-browse dialog (its own breadcrumb) to pick a
+    destination. Moving/renaming onto an existing name fails instead of
+    overwriting.
 - `/config` - WiFi network picker (scans, lets you pick an SSID and enter a
-  password) and a screen brightness slider.
+  password) and a screen brightness slider (capped at 50% actual PWM duty in
+  firmware, regardless of the slider's 0-100% label - see `LCD_setBacklight`
+  in `lcd_display.cpp`).
 - `/api` - HTTP API reference page (see below).
 
 ### HTTP API
+All file/folder endpoints below take an optional `dir` query param (a
+relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
+
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/filelist` | List files as `name:size` (`\|`-separated) |
-| GET | `/download?name=NAME` | Download a file |
-| POST | `/upload` | Upload a file (multipart field `f`) |
-| GET | `/delete?name=NAME` | Delete a file |
+| GET | `/api/filelist?dir=DIR` | List entries as `name:size` for files or `name/:0` for folders (`\|`-separated) |
+| GET | `/download?dir=DIR&name=NAME` | Download a file |
+| GET | `/preview?dir=DIR&name=NAME` | Read up to the first 8KB of a file as plain text (used by the UI's text preview) |
+| POST | `/upload?dir=DIR` | Upload a file (multipart field `f`) |
+| GET | `/delete?dir=DIR&name=NAME` | Delete a file, or a folder and everything inside it |
+| GET | `/mkdir?dir=DIR&name=NAME` | Create a subfolder |
+| GET | `/move?dir=DIR&name=NAME&destDir=DEST` | Move a file into another folder; fails if the name is already taken there |
+| GET | `/rename?dir=DIR&name=NAME&newName=NEW` | Rename a file or folder; fails if the new name is already taken |
 | GET | `/eject` | Finish pending writes, unmount the SD card |
 | GET | `/format` | Erase the SD card and create a fresh filesystem |
 | GET | `/api/sdstatus` | `ready`, `faulty`, or `missing` |
 | GET | `/aplist` | Last WiFi scan result |
 | GET | `/wifisave?s=SSID&p=PASS` | Save WiFi credentials, switch to station mode |
+| GET | `/brightness?value=PERCENT` | Set screen illumination (0-100; actual duty is capped at 50% in hardware) |
 
 ## Known limitations
-- No subfolders - all files live flat in the SD card's root.
-- Filenames: up to 64 characters, restricted to letters, digits, `. _ -` and
-  space.
+- File/folder names: up to 255 characters (FAT's long-filename cap),
+  restricted to letters, digits, `. _ -` and space - other characters are
+  silently stripped rather than rejecting the whole name.
 - No exFAT support (disabled in the Arduino core's bundled FatFs), so the
   card is always formatted FAT16/FAT32 - the >4GiB split-file scheme above is
   what makes large files possible despite that.
-- Filenames starting with `.` are reserved for internal use (split-file parts
+- Names starting with `.` are reserved for internal use (split-file parts
   and manifests) and won't appear in the file list if uploaded directly.
+- Text preview reads only the first 8KB of a file (`PREVIEW_MAX_BYTES` in
+  `config.h`); larger text files are truncated in the preview panel (download
+  still gets the whole file).

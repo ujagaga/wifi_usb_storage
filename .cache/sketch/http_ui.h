@@ -72,6 +72,8 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   table.files .ficon{ display:inline-block; vertical-align:-2px; margin-right:.4rem; color:#e0b357; }
   table.files td.sz{ color:#8b93a3; white-space:nowrap; }
   table.files td.cfgfile{ color:#8a7fd1; font-style:italic; }
+  table.files a.pvlink{ color:inherit; text-decoration:none; cursor:pointer; }
+  table.files tr.pvrow:hover{ opacity:.7; }
   #ctxmenu{ position:fixed; display:none; background:#1b212b; border:1px solid #232b37;
     border-radius:.5rem; box-shadow:0 6px 18px rgba(0,0,0,.45); z-index:60; min-width:140px; padding:.3rem; }
   #ctxmenu button{ display:block; width:100%; text-align:left; border:0; background:none; color:#e6e9ef;
@@ -87,6 +89,12 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   .maincol{ flex:1; min-width:0; }
   #previewcol{ display:none; width:320px; flex:0 0 320px; position:sticky; top:1.2rem; }
   #previewcol img{ max-width:100%; border-radius:.5rem; display:block; }
+  #previewcol:fullscreen, #previewcol:-webkit-full-screen{
+    width:100vw; height:100vh; max-width:none; position:static; top:auto;
+    display:flex; flex-direction:column; box-sizing:border-box; }
+  #previewcol:fullscreen img, #previewcol:-webkit-full-screen img{
+    flex:1; min-height:0; max-height:100%; max-width:100%; margin:auto; object-fit:contain; }
+  #previewcol:fullscreen pre, #previewcol:-webkit-full-screen pre{ flex:1; max-height:none; }
   .iconbtn{ padding:.35rem .5rem; display:inline-flex; align-items:center; justify-content:center; }
   @media (max-width:700px){
     .layout{ flex-direction:column; }
@@ -329,9 +337,10 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         }else{
           if(isPreviewable(name)){
             var pv=document.createElement('a');
-            pv.href='#'; pv.textContent=name;
+            pv.className='pvlink'; pv.href='#'; pv.textContent=name;
             pv.onclick=function(e){ e.preventDefault(); showPreview(name); };
             tdName.appendChild(pv);
+            tr.className='pvrow';
           }else{
             tdName.textContent=name;
           }
@@ -409,10 +418,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       document.exitFullscreen();
       return;
     }
-    var img = document.getElementById('previewImg');
-    var txt = document.getElementById('previewText');
-    var el = (img.style.display !== 'none' && img.src) ? img : (txt.style.display !== 'none' ? txt : null);
-    if(el){ el.requestFullscreen(); }
+    document.getElementById('previewcol').requestFullscreen();
   }
   function hideCtxMenu(){
     document.getElementById('ctxmenu').style.display='none';
