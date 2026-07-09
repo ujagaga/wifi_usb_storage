@@ -4,6 +4,8 @@ Firmware for a Waveshare **ESP32-C6-LCD-1.47** (ST7789, 172x320 IPS) that turns 
 microSD card into WiFi-accessible file storage, with hot-plug SD card support
 and a small on-device status display.
 
+![Web UI screenshot](Screenshot.png)
+
 ## Hardware
 
 - Board: ESP32-C6-LCD-1.47 (172x320 ST7789 LCD)
