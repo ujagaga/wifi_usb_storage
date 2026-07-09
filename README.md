@@ -4,6 +4,10 @@ Firmware for a Waveshare **ESP32-C6-LCD-1.47** (ST7789, 172x320 IPS) that turns 
 microSD card into WiFi-accessible file storage, with hot-plug SD card support
 and a small on-device status display.
 
+## TODO
+
+Waiting for a device with native USB support so I can make it behave like USB flash storage, so it can be used on a TV for playing videos while the video is being uploaded. Esentially a streaming feature for a non-smart TV.
+
 ![Web UI screenshot](Screenshot.png)
 
 ## Hardware
@@ -123,3 +127,4 @@ relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
 - Text preview reads only the first 8KB of a file (`PREVIEW_MAX_BYTES` in
   `config.h`); larger text files are truncated in the preview panel (download
   still gets the whole file).
+
