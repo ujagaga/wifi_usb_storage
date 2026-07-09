@@ -20,10 +20,11 @@
 // brought back automatically if the station connection is later lost.
 #define AP_AUTO_OFF_MS          (120000)
 
-// WiFi credentials live in RAM only. If an SD card is present they are also
-// mirrored to this file (ssid on line 1, password on line 2) so they survive
-// a reboot; without a card (or before one is inserted) they are RAM-only.
-#define WIFI_CFG_PATH           "/wifi.cfg"
+// WiFi credentials (and screen brightness) live in RAM only. If an SD card is
+// present they are also mirrored to this file (ssid on line 1, password on
+// line 2, brightness percent on line 3) so they survive a reboot; without a
+// card (or before one is inserted) they are RAM-only.
+#define WIFI_CFG_PATH           "/config.txt"
 
 // ESP32-C6-LCD-1.47 display pins (Waveshare wiki)
 #define TFT_MOSI  6
@@ -49,5 +50,10 @@
 // transparently split into hidden numbered part files plus a manifest (see
 // sd_storage.cpp); this cap is kept comfortably below the hard limit.
 #define SD_PART_MAX_BYTES ((uint64_t)4000000000ULL)
+
+// Text-file preview in the web UI reads at most this many bytes from the
+// card, so previewing a large log/text file can't tie up the SD bus or the
+// single-threaded web server for long.
+#define PREVIEW_MAX_BYTES ((uint32_t)8192)
 
 #endif

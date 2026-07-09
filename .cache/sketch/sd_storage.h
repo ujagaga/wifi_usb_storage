@@ -25,6 +25,7 @@ extern bool SDSTOR_format(void);           // wipe the card and lay down a fresh
 extern String SDSTOR_list(String dir);     // "name:size|name:size|...", dirs reported as "name/:0"
 extern bool SDSTOR_mkdir(String dir, String name);
 extern bool SDSTOR_sendRaw(String dir, String name, WebServer* server);  // stream file to HTTP client
+extern bool SDSTOR_sendPreview(String dir, String name, uint32_t maxBytes, WebServer* server);  // capped text/plain read, for UI preview
 extern bool SDSTOR_delete(String dir, String name);  // recursively removes a folder
 extern bool SDSTOR_move(String srcDir, String name, String destDir);  // fails if destDir already has this name
 extern bool SDSTOR_rename(String dir, String oldName, String newName);  // fails if newName is already taken

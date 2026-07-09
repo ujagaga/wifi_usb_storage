@@ -21,6 +21,7 @@
 static char myApName[24] = {0};         // AP name
 static String st_ssid = "";             // Saved SSID
 static String st_pass = "";             // Saved password
+static uint8_t st_brightness = 80;      // Saved screen illumination percent (matches the old fixed boot default)
 static IPAddress stationIP;
 static IPAddress apIP(192, 168, 4, 1);
 static bool stationConnectedOnce = false; // mark first successful STA connect
@@ -47,10 +48,14 @@ String WIFIC_getStPass(void) {
     return String(st_pass);
 }
 
+uint8_t WIFIC_getBrightness(void) {
+    return st_brightness;
+}
+
 // -----------------------------------------------------------------------------
-// SD card helpers (WIFI_CFG_PATH: line 1 = ssid, line 2 = password)
-// Credentials always live in RAM (st_ssid/st_pass); the SD file is only a
-// mirror that's written/read when a card happens to be present.
+// SD card helpers (WIFI_CFG_PATH: line 1 = ssid, line 2 = password, line 3 =
+// brightness percent). Credentials/brightness always live in RAM; the SD file
+// is only a mirror that's written/read when a card happens to be present.
 // -----------------------------------------------------------------------------
 static void saveCredsToSD(void) {
     if (!SDSTOR_isReady()) {
@@ -64,14 +69,15 @@ static void saveCredsToSD(void) {
     if (f) {
         f.println(st_ssid);
         f.println(st_pass);
+        f.println(st_brightness);
         f.close();
     }
     LCD_busAcquire();
 }
 
-// Loads RAM creds from the SD file if one exists; otherwise creates the file
-// from whatever's currently in RAM. Returns true if creds were loaded from
-// an existing file (caller should then reconnect with them).
+// Loads RAM creds/brightness from the SD file if one exists; otherwise
+// creates the file from whatever's currently in RAM. Returns true if loaded
+// from an existing file (caller should then reconnect with the loaded creds).
 static bool loadOrCreateCredsFromSD(void) {
     if (!SDSTOR_isReady()) {
         return false;
@@ -84,6 +90,14 @@ static bool loadOrCreateCredsFromSD(void) {
         st_ssid.trim();
         st_pass = f.readStringUntil('\n');
         st_pass.trim();
+        String br = f.readStringUntil('\n');
+        br.trim();
+        if (br.length() > 0) {
+            int v = br.toInt();
+            if (v >= 0 && v <= 100) {
+                st_brightness = (uint8_t)v;
+            }
+        }
         f.close();
     }
     LCD_busAcquire();
@@ -101,6 +115,15 @@ void WIFIC_setStSSID(String new_ssid) {
 
 void WIFIC_setStPass(String new_pass) {
     st_pass = new_pass;
+    saveCredsToSD();
+}
+
+void WIFIC_setBrightness(uint8_t percent) {
+    if (percent > 100) {
+        percent = 100;
+    }
+    st_brightness = percent;
+    LCD_setBacklight(st_brightness);
     saveCredsToSD();
 }
 
@@ -170,6 +193,7 @@ void WIFIC_init(void) {
     // Load saved credentials from SD if a card happens to be present already
     // (no-op otherwise - creds simply stay RAM-only until a card shows up).
     loadOrCreateCredsFromSD();
+    LCD_setBacklight(st_brightness);
     sdWasReady = SDSTOR_isReady();
 
     // Setup AP and STA
@@ -189,6 +213,7 @@ void WIFIC_process(void) {
         if (loadOrCreateCredsFromSD()) {
             WIFIC_stationMode();
         }
+        LCD_setBacklight(st_brightness);
     }
     sdWasReady = sdReady;
 

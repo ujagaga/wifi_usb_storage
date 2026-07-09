@@ -11,6 +11,8 @@ extern void WIFIC_startScan(void);            // begin an async WiFi scan
 extern String WIFIC_getApList(void);          // results of the last scan ("" if not ready)
 extern String WIFIC_getStSSID(void);
 extern String WIFIC_getStPass(void);
+extern uint8_t WIFIC_getBrightness(void);
+extern void WIFIC_setBrightness(uint8_t percent);  // 0..100, persisted to WIFI_CFG_PATH
 extern char* WIFIC_getDeviceName(void);       
 extern String WIFIC_getStationIp(void);       
 extern bool WIFIC_stationConnected(void);     

@@ -19,9 +19,10 @@ and a small on-device status display.
   `AP_NAME_PREFIX`/`AP_PASS` in `config.h`), IP `192.168.4.1`. This is how you
   first reach the device's web UI.
 - **Station mode** to join your own WiFi: pick a network from a scan and enter
-  its password on the `/selectap` page. Credentials live in RAM; they're
-  mirrored to a file on the SD card (if one is present) so they survive a
-  reboot. Without a card, they're RAM-only and are lost on power-cycle.
+  its password on the `/config` page. Credentials (and screen brightness) live
+  in RAM; they're mirrored to a file on the SD card (if one is present) so
+  they survive a reboot. Without a card, they're RAM-only and are lost on
+  power-cycle.
 - **Automatic AP power-down**: once station mode is connected and no AP
   clients have been seen for a while (`AP_AUTO_OFF_MS`), the AP is switched
   off to save power. It comes back automatically if the station connection
@@ -56,8 +57,8 @@ and a small on-device status display.
 - `/` - main page: station IP, file list with download/delete, upload
   (multi-file), Eject, and Format buttons. When no SD card is present, or
   it's faulty, this area is replaced with the relevant message instead.
-- `/selectap` - WiFi network picker (scans, lets you pick an SSID and enter a
-  password).
+- `/config` - WiFi network picker (scans, lets you pick an SSID and enter a
+  password) and a screen brightness slider.
 - `/api` - HTTP API reference page (see below).
 
 ### HTTP API

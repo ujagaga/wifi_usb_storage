@@ -20,7 +20,7 @@ static const char HTML_BEGIN[] PROGMEM = R"(
       body { background:#11151c; color:#e6e9ef; font-family: system-ui, Arial, Helvetica, sans-serif; margin:0; }
       a{ color:#ff7a5c; }
       .contain{ width:100%; }
-      .center_div{ margin:0 auto; width:92%; max-width:800px; position:relative; padding:1.2rem 0 4.5rem; }
+      .center_div{ margin:0 auto; width:92%; max-width:1100px; position:relative; padding:1.2rem 0 4.5rem; }
     </style>
   </head>
   <body>
@@ -39,7 +39,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
 </style>
 <div class="nav">
   <a href="/">Home</a>
-  <a href="/selectap">WiFi</a>
+  <a href="/config">Config</a>
   <a href="/api">API docs</a>
 </div>
 <script>(function(){var p=location.pathname,l=document.querySelectorAll('.nav a');
@@ -71,6 +71,7 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   table.files th{ color:#8b93a3; font-weight:600; }
   table.files .ficon{ display:inline-block; vertical-align:-2px; margin-right:.4rem; color:#e0b357; }
   table.files td.sz{ color:#8b93a3; white-space:nowrap; }
+  table.files td.cfgfile{ color:#8a7fd1; font-style:italic; }
   #ctxmenu{ position:fixed; display:none; background:#1b212b; border:1px solid #232b37;
     border-radius:.5rem; box-shadow:0 6px 18px rgba(0,0,0,.45); z-index:60; min-width:140px; padding:.3rem; }
   #ctxmenu button{ display:block; width:100%; text-align:left; border:0; background:none; color:#e6e9ef;
@@ -82,6 +83,15 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
   #movebox .card{ max-width:360px; margin:10vh auto; }
   .mvrow{ padding:.45rem .3rem; cursor:pointer; border-radius:.35rem; font-size:.85rem; }
   .mvrow:hover{ background:#2a3340; }
+  .layout{ display:flex; gap:1rem; align-items:flex-start; }
+  .maincol{ flex:1; min-width:0; }
+  #previewcol{ display:none; width:320px; flex:0 0 320px; position:sticky; top:1.2rem; }
+  #previewcol img{ max-width:100%; border-radius:.5rem; display:block; }
+  .iconbtn{ padding:.35rem .5rem; display:inline-flex; align-items:center; justify-content:center; }
+  @media (max-width:700px){
+    .layout{ flex-direction:column; }
+    #previewcol{ width:100%; flex:none; position:static; }
+  }
 </style>
 <div class="contain">
   <div class="center_div">
@@ -142,19 +152,34 @@ static const char SD_POLL_HTML[] PROGMEM = R"(
 )";
 
 static const char INDEX_HTML_1[] PROGMEM = R"(
-  <div class="card">
-    <div class="btn-row">
-      <label class="btn accent" for="up">Upload file</label>
-      <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
-      <button class="btn" onclick="newFolder();">New folder</button>
-      <button class="btn" onclick="ejectSD();">Eject SD card</button>
-      <button class="btn" onclick="formatSD();">Format SD card</button>
+<div class="layout">
+  <div class="maincol">
+    <div class="card">
+      <div class="btn-row">
+        <label class="btn accent" for="up">Upload file</label>
+        <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
+        <button class="btn" onclick="newFolder();">New folder</button>
+        <button class="btn" onclick="ejectSD();">Eject SD card</button>
+        <button class="btn" onclick="formatSD();">Format SD card</button>
+      </div>
+    </div>
+    <div class="card">
+      <div id="crumb"></div>
+      <table class="files"><tbody id="flist"></tbody></table>
     </div>
   </div>
-  <div class="card">
-    <div id="crumb"></div>
-    <table class="files"><tbody id="flist"></tbody></table>
+  <div id="previewcol" class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;gap:.3rem;">
+      <span id="previewName" style="font-size:.85rem;color:#cfd4de;word-break:break-all;flex:1;min-width:0;"></span>
+      <button class="btn iconbtn" id="prevBtn" onclick="prevPreview();" title="Previous"></button>
+      <button class="btn iconbtn" id="nextBtn" onclick="nextPreview();" title="Next"></button>
+      <button class="btn iconbtn" id="fsBtn" onclick="toggleFullscreen();" title="Fullscreen"></button>
+      <button class="btn iconbtn" style="padding:.35rem .6rem;" onclick="closePreview();" title="Close">&times;</button>
+    </div>
+    <img id="previewImg" alt="">
+    <pre id="previewText" style="display:none;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.75rem;color:#cfd4de;background:#11151c;border-radius:.5rem;padding:.6rem;margin:0;"></pre>
   </div>
+</div>
 </div>
 <div id="ctxmenu"></div>
 <div id="movebox" onclick="if(event.target===this){ closeMoveDialog(); }">
@@ -171,6 +196,18 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
 <script>
   var currentDir = '';
   var FOLDER_ICON_SVG = '<svg viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M64 448l384 0c35.3 0 64-28.7 64-64l0-240c0-35.3-28.7-64-64-64L298.7 80c-6.9 0-13.7-2.2-19.2-6.4L241.1 44.8C230 36.5 216.5 32 202.7 32L64 32C28.7 32 0 60.7 0 96L0 384c0 35.3 28.7 64 64 64z"/></svg>';
+  var CHEVRON_LEFT_SVG = '<svg viewBox="0 0 320 512" width="12" height="12"><path fill="currentColor" d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l192 192c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 246.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-192 192z"/></svg>';
+  var CHEVRON_RIGHT_SVG = '<svg viewBox="0 0 320 512" width="12" height="12"><path fill="currentColor" d="M311.1 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L243.2 256 73.9 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"/></svg>';
+  var EXPAND_SVG = '<svg viewBox="0 0 448 512" width="12" height="12"><path fill="currentColor" d="M32 32C14.3 32 0 46.3 0 64l0 96c0 17.7 14.3 32 32 32s32-14.3 32-32l0-64 64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 32zM64 352c0-17.7-14.3-32-32-32S0 334.3 0 352l0 96c0 17.7 14.3 32 32 32l96 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0 0-64zM320 32c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0 0 64c0 17.7 14.3 32 32 32s32-14.3 32-32l0-96c0-17.7-14.3-32-32-32l-96 0zM448 352c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 64-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l96 0c17.7 0 32-14.3 32-32l0-96z"/></svg>';
+  var COMPRESS_SVG = '<svg viewBox="0 0 448 512" width="12" height="12"><path fill="currentColor" d="M160 64c0-17.7-14.3-32-32-32S96 46.3 96 64l0 64-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l96 0c17.7 0 32-14.3 32-32l0-96zM32 320c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0 0 64c0 17.7 14.3 32 32 32s32-14.3 32-32l0-96c0-17.7-14.3-32-32-32l-96 0zM352 64c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 96c0 17.7 14.3 32 32 32l96 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0 0-64zM320 320c-17.7 0-32 14.3-32 32l0 96c0 17.7 14.3 32 32 32s32-14.3 32-32l0-64 64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-96 0z"/></svg>';
+  document.getElementById('prevBtn').innerHTML = CHEVRON_LEFT_SVG;
+  document.getElementById('nextBtn').innerHTML = CHEVRON_RIGHT_SVG;
+  document.getElementById('fsBtn').innerHTML = EXPAND_SVG;
+  document.addEventListener('fullscreenchange', function(){
+    document.getElementById('fsBtn').innerHTML = document.fullscreenElement ? COMPRESS_SVG : EXPAND_SVG;
+  });
+  var previewList = [];
+  var previewIndex = -1;
   function fmtSize(n){
     if(n<1024){ return n+' B'; }
     if(n<1024*1024){ return (n/1024).toFixed(1)+' KB'; }
@@ -262,8 +299,12 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       });
       entries.sort(function(a, b){
         if(a.isDir !== b.isDir){ return a.isDir ? -1 : 1; }
+        var aCfg = !a.isDir && a.name === 'config.txt';
+        var bCfg = !b.isDir && b.name === 'config.txt';
+        if(aCfg !== bCfg){ return aCfg ? 1 : -1; }
         return a.name.localeCompare(b.name, undefined, {sensitivity:'base'});
       });
+      previewList = entries.filter(function(e){ return !e.isDir && isPreviewable(e.name); }).map(function(e){ return e.name; });
       var tbody=document.getElementById('flist');
       tbody.innerHTML='';
       entries.forEach(function(entry){
@@ -272,6 +313,9 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         var tdName=document.createElement('td');
         var tdSize=document.createElement('td');
         tdSize.className='sz';
+        if(!isDir && name === 'config.txt'){
+          tdName.className='cfgfile';
+        }
         if(isDir){
           var icon=document.createElement('span');
           icon.className='ficon';
@@ -283,7 +327,14 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
           tdName.appendChild(fl);
           tdSize.textContent='Folder';
         }else{
-          tdName.textContent=name;
+          if(isPreviewable(name)){
+            var pv=document.createElement('a');
+            pv.href='#'; pv.textContent=name;
+            pv.onclick=function(e){ e.preventDefault(); showPreview(name); };
+            tdName.appendChild(pv);
+          }else{
+            tdName.textContent=name;
+          }
           tdSize.textContent=fmtSize(size);
         }
         tr.oncontextmenu=function(e){ e.preventDefault(); showCtxMenu(e.clientX, e.clientY, name, isDir); };
@@ -298,6 +349,71 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   function downloadFile(name){
     window.location = '/download?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name);
   }
+  var IMAGE_EXTS = ['jpg','jpeg','png','gif','svg','webp','bmp','ico'];
+  var TEXT_EXTS = ['txt','log','csv','json','md','ini','cfg','yaml','yml','xml'];
+  function extOf(name){
+    var dot = name.lastIndexOf('.');
+    return dot < 0 ? '' : name.slice(dot+1).toLowerCase();
+  }
+  function previewKind(name){
+    var ext = extOf(name);
+    if(IMAGE_EXTS.indexOf(ext) >= 0){ return 'image'; }
+    if(TEXT_EXTS.indexOf(ext) >= 0){ return 'text'; }
+    return null;
+  }
+  function isPreviewable(name){
+    return previewKind(name) !== null;
+  }
+  function showPreview(name){
+    previewIndex = previewList.indexOf(name);
+    renderPreview();
+  }
+  function nextPreview(){
+    if(!previewList.length){ return; }
+    previewIndex = (previewIndex + 1) % previewList.length;
+    renderPreview();
+  }
+  function prevPreview(){
+    if(!previewList.length){ return; }
+    previewIndex = (previewIndex - 1 + previewList.length) % previewList.length;
+    renderPreview();
+  }
+  function renderPreview(){
+    if(previewIndex < 0 || previewIndex >= previewList.length){ return; }
+    var name = previewList[previewIndex];
+    var img = document.getElementById('previewImg');
+    var txt = document.getElementById('previewText');
+    document.getElementById('previewName').textContent = name;
+    document.getElementById('previewcol').style.display = 'block';
+    if(previewKind(name) === 'image'){
+      txt.style.display = 'none';
+      txt.textContent = '';
+      img.style.display = 'block';
+      img.src = '/download?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name);
+    }else{
+      img.style.display = 'none';
+      img.src = '';
+      txt.style.display = 'block';
+      txt.textContent = 'Loading...';
+      fetch('/preview?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name)).then(function(r){return r.text();}).then(function(t){
+        txt.textContent = t;
+      }).catch(function(e){ txt.textContent = 'Preview error: ' + e.message; });
+    }
+  }
+  function closePreview(){
+    document.getElementById('previewcol').style.display = 'none';
+    document.getElementById('previewImg').src = '';
+  }
+  function toggleFullscreen(){
+    if(document.fullscreenElement){
+      document.exitFullscreen();
+      return;
+    }
+    var img = document.getElementById('previewImg');
+    var txt = document.getElementById('previewText');
+    var el = (img.style.display !== 'none' && img.src) ? img : (txt.style.display !== 'none' ? txt : null);
+    if(el){ el.requestFullscreen(); }
+  }
   function hideCtxMenu(){
     document.getElementById('ctxmenu').style.display='none';
   }
@@ -309,6 +425,12 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       dl.textContent='Download';
       dl.onclick=function(){ hideCtxMenu(); downloadFile(name); };
       menu.appendChild(dl);
+      if(isPreviewable(name)){
+        var pv=document.createElement('button');
+        pv.textContent='Preview';
+        pv.onclick=function(){ hideCtxMenu(); showPreview(name); };
+        menu.appendChild(pv);
+      }
       var mv=document.createElement('button');
       mv.textContent='Move';
       mv.onclick=function(){ hideCtxMenu(); showMoveDialog(name); };
@@ -459,6 +581,12 @@ static const char APLIST_HTML_2[] PROGMEM = R"(
         <input id='p' name='p' length=32 placeholder='Password'><br>
         <br><button type='submit'>Save</button>
       </form>
+      <div style="margin-top:2rem;">
+        <label for="bl" style="display:block;margin-bottom:.4rem;">Screen illumination: <span id="blval"></span>%</label>
+        <input type="range" id="bl" min="0" max="100" step="1" value=")";
+
+static const char APLIST_HTML_3[] PROGMEM = R"(" oninput="document.getElementById('blval').textContent=this.value;" onchange="setBrightness(this.value);">
+      </div>
      </div>
   </div>
 <script>
@@ -488,6 +616,10 @@ static const char APLIST_HTML_2[] PROGMEM = R"(
       if(tries>0){ setTimeout(function(){ load(tries-1); }, 2000); } else { done(); }
     });
   }
+  function setBrightness(v){
+    fetch('/brightness?value=' + encodeURIComponent(v));
+  }
+  document.getElementById('blval').textContent = document.getElementById('bl').value;
   setTimeout(function(){ document.getElementById('pfill').style.width='100%'; }, 50); // animate bar
   setTimeout(function(){ load(3); }, 10000);   // fetch after the bar fills, then retry
 </script>
@@ -536,6 +668,7 @@ static const char API_HTML_1[] PROGMEM = R"(
     <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
     <tr><td class="m">GET</td><td><code>/api/filelist?dir=DIR</code></td><td>List files as <code>name:size</code> and folders as <code>name/:0</code> (| separated)</td></tr>
     <tr><td class="m">GET</td><td><code>/download?dir=DIR&amp;name=NAME</code></td><td>Download a file from the SD card</td></tr>
+    <tr><td class="m">GET</td><td><code>/preview?dir=DIR&amp;name=NAME</code></td><td>Read up to the first 8KB of a file as plain text (used by the UI's text preview)</td></tr>
     <tr><td class="m">POST</td><td><code>/upload?dir=DIR</code></td><td>Upload a file (multipart form field <code>f</code>)</td></tr>
     <tr><td class="m">GET</td><td><code>/delete?dir=DIR&amp;name=NAME</code></td><td>Delete a file, or a folder and everything inside it</td></tr>
     <tr><td class="m">GET</td><td><code>/mkdir?dir=DIR&amp;name=NAME</code></td><td>Create a subfolder</td></tr>
@@ -550,7 +683,8 @@ static const char API_HTML_1[] PROGMEM = R"(
     <tr><td class="m">GET</td><td><code>/aplist</code></td><td>Last WiFi scan result (empty until ready)</td></tr>
     <tr><td class="m">GET</td><td><code>/wifisave?s=SSID&amp;p=PASS</code></td><td>Save WiFi credentials, switch to station mode</td></tr>
     <tr><td class="m">GET</td><td><code>/</code></td><td>Main web page</td></tr>
-    <tr><td class="m">GET</td><td><code>/selectap</code></td><td>WiFi config page (starts an async scan)</td></tr>
+    <tr><td class="m">GET</td><td><code>/config</code></td><td>WiFi &amp; screen brightness config page (starts an async scan)</td></tr>
+    <tr><td class="m">GET</td><td><code>/brightness?value=PERCENT</code></td><td>Set screen illumination (0-100; actual duty is capped at 50% in hardware)</td></tr>
     <tr><td class="m">GET</td><td><code>/api</code></td><td>This documentation page</td></tr>
     <tr><td class="m">GET</td><td><code>/api/sdstatus</code></td><td>Returns <code>ready</code>, <code>faulty</code> (present, unreadable filesystem) or <code>missing</code></td></tr>
     <tr><td class="m">GET</td><td><code>/eject</code></td><td>Finish pending writes and unmount the SD card for safe removal</td></tr>

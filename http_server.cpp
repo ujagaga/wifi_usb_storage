@@ -85,8 +85,18 @@ static void selectAP(void) {
   response += FPSTR(NAV_HTML);
   response += FPSTR(APLIST_HTML_1);
   response += FPSTR(APLIST_HTML_2);
+  response += String(WIFIC_getBrightness());
+  response += FPSTR(APLIST_HTML_3);
   response += FPSTR(HTML_END);
   webServer->send(200, "text/html", response);
+}
+
+static void setBrightness(void){
+  int val = webServer->arg("value").toInt();
+  if(val < 0){ val = 0; }
+  if(val > 100){ val = 100; }
+  WIFIC_setBrightness((uint8_t)val);
+  webServer->send(200, "text/plain", "OK");
 }
 
 static void saveWiFi(void){
@@ -138,6 +148,16 @@ static void downloadFile(void){
   }
   String name = webServer->arg("name");
   if(name.length() == 0 || !SDSTOR_sendRaw(webServer->arg("dir"), name, webServer)){
+    webServer->send(404, "text/plain", "File not found");
+  }
+}
+
+static void previewFile(void){
+  if(!requireSD()){
+    return;
+  }
+  String name = webServer->arg("name");
+  if(name.length() == 0 || !SDSTOR_sendPreview(webServer->arg("dir"), name, PREVIEW_MAX_BYTES, webServer)){
     webServer->send(404, "text/plain", "File not found");
   }
 }
@@ -271,11 +291,13 @@ void HTTP_SERVER_init(void){
 
   webServer->on("/", HTTP_GET, showStartPage);
   webServer->on("/favicon.ico", HTTP_GET, showNotFound);
-  webServer->on("/selectap", HTTP_GET, selectAP);
+  webServer->on("/config", HTTP_GET, selectAP);
   webServer->on("/api", HTTP_GET, showApiPage);
   webServer->on("/wifisave", HTTP_GET, saveWiFi);
+  webServer->on("/brightness", HTTP_GET, setBrightness);
   webServer->on("/api/filelist", HTTP_GET, fileList);
   webServer->on("/download", HTTP_GET, downloadFile);
+  webServer->on("/preview", HTTP_GET, previewFile);
   webServer->on("/upload", HTTP_POST, uploadDone, uploadFile_handler);
   webServer->on("/delete", HTTP_GET, deleteFile);
   webServer->on("/mkdir", HTTP_GET, mkdirHandler);

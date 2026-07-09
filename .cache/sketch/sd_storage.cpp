@@ -400,6 +400,57 @@ bool SDSTOR_sendRaw(String dir, String name, WebServer* server){
   return true;
 }
 
+// Streams up to maxBytes of a file as plain text (no Content-Disposition, so
+// it's inline rather than a download) - used for the web UI's text preview.
+// If the file was split, only part 1 is read; maxBytes is always far smaller
+// than SD_PART_MAX_BYTES, so this never needs to cross into part 2.
+bool SDSTOR_sendPreview(String dir, String name, uint32_t maxBytes, WebServer* server){
+  if(!cardReady){
+    return false;
+  }
+  String dirPrefix;
+  if(!sanitizeDir(dir, dirPrefix)){
+    return false;
+  }
+  String baseName = sanitizeName(name);
+  if(baseName.length() == 0){
+    return false;
+  }
+
+  LCD_busRelease();
+  bool isSplit = SD.exists(manifestPath(dirPrefix, baseName));
+  String path = isSplit ? partPath(dirPrefix, baseName, 1) : (dirPrefix + "/" + baseName);
+  File f = SD.open(path);
+  LCD_busAcquire();
+  if(!f){
+    return false;
+  }
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "text/plain", "");
+
+  static uint8_t buf[512];
+  uint32_t sent = 0;
+  while(sent < maxBytes){
+    uint32_t remaining = maxBytes - sent;
+    size_t want = sizeof(buf);
+    if(remaining < want){
+      want = (size_t)remaining;
+    }
+    LCD_busRelease();
+    int got = f.read(buf, want);
+    LCD_busAcquire();
+    if(got <= 0){
+      break;
+    }
+    server->sendContent((const char*)buf, got);
+    sent += got;
+  }
+
+  f.close();
+  return true;
+}
+
 // --- Incremental upload to SD ---
 static File uploadFile;
 static String uploadDirPrefix;    // absolute folder prefix ("" for root), resolved at writeBegin
