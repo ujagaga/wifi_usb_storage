@@ -56,6 +56,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
       <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/theme').then(function(){ location.reload(); });">Toggle Theme</button>
       <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
       <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
+      <button id="menuDownloadUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); downloadUpdate();">Download Update</button>
     </div>
   </div>
 </div>
@@ -66,7 +67,18 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
   document.addEventListener('DOMContentLoaded', function(){
     if(typeof ejectSD !== 'function'){ document.getElementById('menuEject').style.display='none'; }
     if(typeof formatSD !== 'function'){ document.getElementById('menuFormat').style.display='none'; }
+    if(typeof showStatus === 'function'){
+      fetch('/api/updatecheck').then(function(r){ return r.text(); }).then(function(v){
+        if(v.trim()){ document.getElementById('menuDownloadUpdate').style.display='block'; }
+      }).catch(function(){});
+    }
   });
+  function downloadUpdate(){
+    showStatus('Downloading firmware update...', 'info');
+    fetch('/downloadupdate').then(function(r){
+      return r.text().then(function(t){ showStatus(t, r.ok ? 'ok' : 'err'); });
+    }).catch(function(e){ showStatus('Download error: ' + e.message, 'err'); });
+  }
 </script>
 )NAV";
 
