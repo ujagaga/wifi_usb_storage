@@ -200,6 +200,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         <label class="btn accent" for="up">Upload file</label>
         <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
         <button class="btn" onclick="newFolder();">New folder</button>
+        <span id="sdspace" style="margin-left:auto;align-self:center;color:var(--muted);font-size:.8rem;white-space:nowrap;"></span>
       </div>
       <div id="crumb"></div>
       <div class="filewrap">
@@ -235,6 +236,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
 <script>
   var currentDir = '';
   var FOLDER_ICON_SVG = '<svg viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M64 448l384 0c35.3 0 64-28.7 64-64l0-240c0-35.3-28.7-64-64-64L298.7 80c-6.9 0-13.7-2.2-19.2-6.4L241.1 44.8C230 36.5 216.5 32 202.7 32L64 32C28.7 32 0 60.7 0 96L0 384c0 35.3 28.7 64 64 64z"/></svg>';
+  var XMARK_CIRCLE_SVG = '<svg viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M256 512a256 256 0 1 0 0-512 256 256 0 1 0 0 512zM167 167c9.4-9.4 24.6-9.4 33.9 0l55 55 55-55c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-55 55 55 55c9.4 9.4 9.4 24.6 0 33.9s-24.6 9.4-33.9 0l-55-55-55 55c-9.4 9.4-24.6 9.4-33.9 0s-9.4-24.6 0-33.9l55-55-55-55c-9.4-9.4-9.4-24.6 0-33.9z"/></svg>';
   var CHEVRON_LEFT_SVG = '<svg viewBox="0 0 320 512" width="12" height="12"><path fill="currentColor" d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l192 192c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 246.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-192 192z"/></svg>';
   var CHEVRON_RIGHT_SVG = '<svg viewBox="0 0 320 512" width="12" height="12"><path fill="currentColor" d="M311.1 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L243.2 256 73.9 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"/></svg>';
   var EXPAND_SVG = '<svg viewBox="0 0 448 512" width="12" height="12"><path fill="currentColor" d="M32 32C14.3 32 0 46.3 0 64l0 96c0 17.7 14.3 32 32 32s32-14.3 32-32l0-64 64 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 32zM64 352c0-17.7-14.3-32-32-32S0 334.3 0 352l0 96c0 17.7 14.3 32 32 32l96 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-64 0 0-64zM320 32c-17.7 0-32 14.3-32 32s14.3 32 32 32l64 0 0 64c0 17.7 14.3 32 32 32s32-14.3 32-32l0-96c0-17.7-14.3-32-32-32l-96 0zM448 352c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 64-64 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l96 0c17.7 0 32-14.3 32-32l0-96z"/></svg>';
@@ -250,7 +252,19 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   function fmtSize(n){
     if(n<1024){ return n+' B'; }
     if(n<1024*1024){ return (n/1024).toFixed(1)+' KB'; }
-    return (n/1024/1024).toFixed(1)+' MB';
+    if(n<1024*1024*1024){ return (n/1024/1024).toFixed(1)+' MB'; }
+    return (n/1024/1024/1024).toFixed(2)+' GB';
+  }
+  function refreshSpace(){
+    fetch('/api/sdspace').then(function(r){ return r.text(); }).then(function(t){
+      var el=document.getElementById('sdspace');
+      if(!el){ return; }
+      t=t.trim();
+      if(!t){ el.textContent=''; return; }
+      var parts=t.split(':');
+      var total=parseInt(parts[0],10), free=parseInt(parts[1],10);
+      el.textContent = fmtSize(free) + ' free of ' + fmtSize(total);
+    }).catch(function(){});
   }
   function navTo(dir){
     currentDir = dir;
@@ -566,36 +580,93 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       });
     }).catch(function(e){ closeMoveDialog(); showStatus('Move error: ' + e.message, 'err'); });
   }
-  function uploadOne(file, label){
+  function fmtSpeed(bps){
+    if(bps<1024){ return bps.toFixed(0)+' B/s'; }
+    if(bps<1024*1024){ return (bps/1024).toFixed(1)+' KB/s'; }
+    return (bps/1024/1024).toFixed(1)+' MB/s';
+  }
+  function fmtEta(sec){
+    if(!isFinite(sec) || sec <= 0){ return ''; }
+    if(sec < 60){ return '<1 min left'; }
+    return Math.ceil(sec/60) + ' min left';
+  }
+  var currentUploadXhr = null;
+  var uploadStopped = false;
+  function stopUpload(){
+    uploadStopped = true;
+    if(currentUploadXhr){ currentUploadXhr.abort(); }
+  }
+  function uploadOne(file, label, row, batch){
     return new Promise(function(resolve){
       var fd=new FormData();
       fd.append('f', file, file.name);
       showStatus(label + 'uploading ' + file.name + '...', 'info');
-      fetch('/upload?dir=' + encodeURIComponent(currentDir), {method:'POST', body:fd}).then(function(rsp){
-        return rsp.text().then(function(t){
-          if(rsp.ok){ resolve(true); }
-          else{ showStatus('Upload failed: ' + t, 'err'); resolve(false); }
-        });
-      }).catch(function(e){ showStatus('Upload error: ' + e.message, 'err'); resolve(false); });
+      var xhr=new XMLHttpRequest();
+      currentUploadXhr = xhr;
+      xhr.open('POST', '/upload?dir=' + encodeURIComponent(currentDir));
+      var lastLoaded=0, lastTime=Date.now();
+      xhr.upload.onprogress=function(e){
+        if(!e.lengthComputable){ return; }
+        var now=Date.now(), dt=(now-lastTime)/1000;
+        if(dt<0.15){ return; }
+        var speed=(e.loaded-lastLoaded)/dt;
+        lastLoaded=e.loaded; lastTime=now;
+        var pct=Math.floor(e.loaded/e.total*100);
+        var remaining=batch.totalBytes - (batch.doneBytes + e.loaded);
+        var eta=speed>0 ? fmtEta(remaining/speed) : '';
+        if(row){ row.sizeCell.textContent = pct + '%' + (eta ? ' - ' + eta : ''); }
+        showStatus(label + file.name + ': ' + pct + '% @ ' + fmtSpeed(speed) + (eta ? ', ' + eta : ''), 'info');
+      };
+      xhr.onload=function(){
+        currentUploadXhr = null;
+        if(xhr.status>=200 && xhr.status<300){ resolve('ok'); }
+        else{ showStatus('Upload failed: ' + xhr.responseText, 'err'); resolve('err'); }
+      };
+      xhr.onerror=function(){ currentUploadXhr = null; showStatus('Upload error', 'err'); resolve('err'); };
+      xhr.onabort=function(){ currentUploadXhr = null; resolve('stopped'); };
+      xhr.send(fd);
     });
   }
   function uploadFiles(list){
     if(!list || !list.length){ return; }
     var files=Array.prototype.slice.call(list);
+    uploadStopped = false;
+    var batch = {totalBytes: files.reduce(function(s,f){ return s+f.size; }, 0), doneBytes: 0};
     var ok=0, idx=0;
+    var tbody=document.getElementById('flist');
+    var rows=files.map(function(f){
+      var tr=document.createElement('tr');
+      var tdName=document.createElement('td'); tdName.textContent=f.name;
+      var tdSize=document.createElement('td'); tdSize.className='sz'; tdSize.textContent='Queued';
+      var tdMenu=document.createElement('td'); tdMenu.className='rowmenu';
+      var ab=document.createElement('button');
+      ab.className='ellipsisbtn'; ab.innerHTML=XMARK_CIRCLE_SVG; ab.title='Abort upload';
+      ab.onclick=function(e){ e.preventDefault(); e.stopPropagation(); stopUpload(); };
+      tdMenu.appendChild(ab);
+      tr.appendChild(tdName); tr.appendChild(tdSize); tr.appendChild(tdMenu);
+      tbody.insertBefore(tr, tbody.firstChild);
+      return {sizeCell: tdSize};
+    });
     function next(){
-      if(idx>=files.length){
-        showStatus('Uploaded ' + ok + ' of ' + files.length + ' file(s)', ok ? 'ok' : 'err');
+      if(uploadStopped || idx>=files.length){
+        showStatus(uploadStopped ? 'Upload stopped' : ('Uploaded ' + ok + ' of ' + files.length + ' file(s)'),
+          uploadStopped ? 'info' : (ok ? 'ok' : 'err'));
         loadFiles();
+        refreshSpace();
         return;
       }
-      var f=files[idx++];
+      var f=files[idx], row=rows[idx];
+      idx++;
       var label=files.length>1 ? ('['+idx+'/'+files.length+'] ') : '';
-      uploadOne(f, label).then(function(good){ if(good){ ok++; } next(); });
+      uploadOne(f, label, row, batch).then(function(result){
+        if(result==='ok'){ ok++; batch.doneBytes += f.size; }
+        next();
+      });
     }
     next();
   }
   loadFiles();
+  refreshSpace();
 </script>
 )";
 

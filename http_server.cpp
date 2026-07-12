@@ -274,6 +274,10 @@ static void sdStatus(void){
   webServer->send(200, "text/plain", s);
 }
 
+static void sdSpace(void){
+  webServer->send(200, "text/plain", SDSTOR_getSpaceInfo());
+}
+
 static void ejectSD(void){
   if(SDSTOR_eject()){
     webServer->send(200, "text/plain", "SD card safely ejected. You may remove it now.");
@@ -318,6 +322,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/rename", HTTP_GET, renameHandler);
   webServer->on("/aplist", HTTP_GET, apList);
   webServer->on("/api/sdstatus", HTTP_GET, sdStatus);
+  webServer->on("/api/sdspace", HTTP_GET, sdSpace);
   webServer->on("/eject", HTTP_GET, ejectSD);
   webServer->on("/format", HTTP_GET, formatSD);
   webServer->onNotFound(showStartPage);

@@ -34,10 +34,10 @@
 #define TFT_BL    22
 
 // Backlight PWM. Docs warn against full brightness for long periods, so default
-// to ~40% duty (8-bit resolution, 102/255).
+// to ~20% duty (8-bit resolution, 50/255).
 #define TFT_BL_FREQ       5000
 #define TFT_BL_RES_BITS   8
-#define TFT_BL_DUTY       102
+#define TFT_BL_DUTY       50
 
 // microSD (TF) card. Shares the SPI bus with the LCD (MOSI=6, SCLK=7);
 // adds MISO and its own chip select.

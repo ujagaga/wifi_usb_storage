@@ -21,6 +21,7 @@ extern bool SDSTOR_isReady(void);          // true if the SD card is mounted and
 extern bool SDSTOR_isFaulty(void);         // true if a card is present but its filesystem can't be read
 extern bool SDSTOR_eject(void);            // finish pending writes, unmount for safe removal
 extern bool SDSTOR_format(void);           // wipe the card and lay down a fresh FAT filesystem
+extern String SDSTOR_getSpaceInfo(void);   // "total:free" bytes, or "" if no card is mounted
 extern String SDSTOR_list(String dir);     // "name:size|name:size|...", dirs reported as "name/:0"
 extern bool SDSTOR_mkdir(String dir, String name);
 extern bool SDSTOR_sendRaw(String dir, String name, WebServer* server);  // stream file to HTTP client

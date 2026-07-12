@@ -780,3 +780,16 @@ bool SDSTOR_format(void){
   ejected = false;
   return mounted;
 }
+
+// "total:free" bytes, or "" if no card is mounted.
+String SDSTOR_getSpaceInfo(void){
+  if(!cardReady){
+    return "";
+  }
+  LCD_busRelease();
+  uint64_t total = SD.totalBytes();
+  uint64_t used = SD.usedBytes();
+  LCD_busAcquire();
+  uint64_t free = (total > used) ? (total - used) : 0;
+  return String(total) + ":" + String(free);
+}

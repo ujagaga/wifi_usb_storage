@@ -9,7 +9,7 @@ and a small on-device status display.
 
 Waiting for a device with native USB support so I can make it behave like USB flash storage, so it can be used on a TV for playing videos while the video is being uploaded. Esentially a streaming feature for a non-smart TV.
 
-![Web UI screenshot](Screenshot.png)
+![Web UI screenshot](Screen.png)
 
 ## Hardware
 
@@ -73,13 +73,17 @@ Waiting for a device with native USB support so I can make it behave like USB fl
 
 ### Web UI
 - `/` - main page: station IP, folder-aware file list (breadcrumb trail,
-  New Folder button), upload (multi-file, into whichever folder is open),
-  Eject, and Format buttons. Folders sort first, then files alphabetically,
-  with `config.txt` always last and in a distinct color. When no SD card is
-  present, or it's faulty, this area is replaced with the relevant message
-  instead.
-  - **Right-click (or long-press) a row** for a context menu: Download,
-    Preview (images/text only), Move, Rename, Delete. Left-clicking a
+  New Folder button), upload (multi-file, into whichever folder is open).
+  Folders sort first, then files alphabetically, with `config.txt` always
+  last and in a distinct color. When no SD card is present, or it's faulty,
+  this area is replaced with the relevant message instead.
+  - The **&#9776; menu** in the nav bar (top right, present on every page)
+    has Toggle Theme, Eject SD Card, and Format SD Card. The latter two only
+    appear on the main page when a card is actually present.
+  - **Right-click (or long-press) a row**, or click the **`...`** button at
+    the row's right edge, for a context menu: Download, Preview (images/text
+    only), Move, Rename, Delete. The `...` button works with a mouse,
+    keyboard, or TV remote, without needing a right-click. Left-clicking a
     previewable file's name opens the preview directly.
   - **Preview panel** on the right (drops below the file list on narrow
     screens): renders images (`jpg jpeg png gif svg webp bmp ico`) or the
@@ -97,8 +101,8 @@ Waiting for a device with native USB support so I can make it behave like USB fl
 - `/api` - HTTP API reference page (see below).
 
 ### UI theme colors
-The **Toggle theme** button in the nav bar switches between the dark
-(default) and light color presets below, persisting the choice to
+The **Toggle Theme** entry in the nav bar's &#9776; menu switches between the
+dark (default) and light color presets below, persisting the choice to
 `config.txt` (`THEME=dark` or `THEME=light`).
 
 The web UI's colors are stored in `config.txt` as `KEY=#rrggbb` lines below
