@@ -101,6 +101,13 @@ bool UPDATE_CHECK_downloadToSD(void){
     return false;
   }
 
+  // The periodic check (once WiFi connects, then every 24h) may not have
+  // run yet this soon after boot - make sure latestVersion/latestMd5 are
+  // populated before staging/naming the download, rather than racing it.
+  if(latestVersion.length() == 0 || latestMd5.length() == 0){
+    doCheck();
+  }
+
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient https;
