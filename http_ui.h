@@ -126,6 +126,11 @@ static const char INDEX_HTML_0[] PROGMEM = R"(
     .layout{ flex-direction:column; }
     #previewcol{ width:100%; flex:none; position:static; }
   }
+  .loadoverlay{ position:fixed; inset:0; background:var(--bg); z-index:9999;
+    display:flex; align-items:center; justify-content:center; }
+  .spinner{ width:40px; height:40px; border:4px solid var(--border);
+    border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
 </style>
 <div class="contain">
   <div class="center_div">
@@ -215,6 +220,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       <button class="btn iconbtn" id="fsBtn" onclick="toggleFullscreen();" title="Fullscreen"></button>
       <button class="btn iconbtn" style="padding:.35rem .6rem;" onclick="closePreview();" title="Close">&times;</button>
     </div>
+    <div id="previewSpinner" class="spinner" style="display:none;margin:2rem auto;"></div>
     <img id="previewImg" alt="">
     <pre id="previewText" style="display:none;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.75rem;color:var(--text);background:var(--bg);border-radius:.5rem;padding:.6rem;margin:0;"></pre>
   </div>
@@ -233,7 +239,11 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   </div>
 </div>
 <script>
-  var currentDir = '';
+  function dirFromUrl(){
+    var m = location.search.match(/[?&]dir=([^&]*)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  var currentDir = dirFromUrl();
   var FOLDER_ICON_SVG = '<svg viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M64 448l384 0c35.3 0 64-28.7 64-64l0-240c0-35.3-28.7-64-64-64L298.7 80c-6.9 0-13.7-2.2-19.2-6.4L241.1 44.8C230 36.5 216.5 32 202.7 32L64 32C28.7 32 0 60.7 0 96L0 384c0 35.3 28.7 64 64 64z"/></svg>';
   var XMARK_CIRCLE_SVG = '<svg viewBox="0 0 512 512" width="14" height="14"><path fill="currentColor" d="M256 512a256 256 0 1 0 0-512 256 256 0 1 0 0 512zM167 167c9.4-9.4 24.6-9.4 33.9 0l55 55 55-55c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-55 55 55 55c9.4 9.4 9.4 24.6 0 33.9s-24.6 9.4-33.9 0l-55-55-55 55c-9.4 9.4-24.6 9.4-33.9 0s-9.4-24.6 0-33.9l55-55-55-55c-9.4-9.4-9.4-24.6 0-33.9z"/></svg>';
   var CHEVRON_LEFT_SVG = '<svg viewBox="0 0 320 512" width="12" height="12"><path fill="currentColor" d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l192 192c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 246.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-192 192z"/></svg>';
@@ -267,8 +277,14 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   }
   function navTo(dir){
     currentDir = dir;
+    var url = dir ? ('/?dir=' + encodeURIComponent(dir)) : '/';
+    history.pushState({dir: dir}, '', url);
     loadFiles();
   }
+  window.addEventListener('popstate', function(){
+    currentDir = dirFromUrl();
+    loadFiles();
+  });
   function renderCrumb(){
     var crumb=document.getElementById('crumb');
     crumb.innerHTML='';
@@ -452,7 +468,11 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
     if(previewKind(name) === 'image'){
       txt.style.display = 'none';
       txt.textContent = '';
-      img.style.display = 'block';
+      img.style.display = 'none';
+      var spinner = document.getElementById('previewSpinner');
+      spinner.style.display = 'block';
+      img.onload = function(){ spinner.style.display = 'none'; img.style.display = 'block'; };
+      img.onerror = function(){ spinner.style.display = 'none'; img.style.display = 'block'; };
       img.src = '/download?dir=' + encodeURIComponent(currentDir) + '&name=' + encodeURIComponent(name);
     }else{
       img.style.display = 'none';
@@ -594,6 +614,10 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   function stopUpload(){
     uploadStopped = true;
     if(currentUploadXhr){ currentUploadXhr.abort(); }
+    var ov=document.createElement('div');
+    ov.className='loadoverlay';
+    ov.innerHTML='<div class="spinner"></div>';
+    document.body.appendChild(ov);
     // A background fetch to refresh the list can race the device still
     // noticing/cleaning up the aborted upload; a full reload just waits
     // naturally for the server instead of silently failing.

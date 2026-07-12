@@ -1,13 +1,12 @@
+#include <SD.h>
 #include <SPI.h>
-#include <SdFat.h>
 #include <WebServer.h>
 #include <sd_diskio.h>   // raw card init (sdcard_init/sdcard_uninit), bypasses the filesystem
 #include <diskio.h>      // disk_initialize() - talks SD protocol directly (DSTATUS/STA_NOINIT)
+#include <ff.h>          // f_mkfs() - force a fresh FAT filesystem, used by SDSTOR_format()
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
-
-static SdFat32 sd;
 
 static bool cardReady = false;
 static bool cardFaulty = false;  // hardware present, but no readable filesystem
@@ -15,13 +14,9 @@ static bool ejected = false;     // true after SDSTOR_eject(), until the card is
 static uint32_t lastRetryMs = 0;
 #define SD_RETRY_INTERVAL_MS 2000
 
-static SdSpiConfig sdSpiConfig(void){
-  return SdSpiConfig(SD_CS, SHARED_SPI, SD_SPI_FREQ, &SPI);
-}
-
 // Talks raw SD protocol on a throwaway drive slot (GO_IDLE_STATE etc.) and
 // tears it straight back down. This is what tells "no card" apart from "card
-// present but its filesystem is unreadable" - sd.begin() alone can't, since
+// present but its filesystem is unreadable" - SD.begin() alone can't, since
 // it fails the same way for both (no card, and no/bad filesystem).
 static bool sdCardPresentProbe(void){
   uint8_t pdrv = sdcard_init(SD_CS, &SPI, SD_SPI_FREQ);
@@ -37,11 +32,11 @@ static bool sdCardPresentProbe(void){
 // filesystem. Updates cardReady/cardFaulty; leaves `ejected` untouched.
 static void attemptMount(void){
   LCD_busRelease();
-  sd.end();
+  SD.end();
   bool present = sdCardPresentProbe();
-  bool mounted = present && sd.begin(sdSpiConfig());
+  bool mounted = present && SD.begin(SD_CS, SPI, SD_SPI_FREQ);
   if(present && !mounted){
-    sd.end();
+    SD.end();
   }
   LCD_busAcquire();
   cardReady = mounted;
@@ -72,7 +67,7 @@ bool SDSTOR_isReady(void){
 
     if(ejected){
       LCD_busRelease();
-      sd.end();
+      SD.end();
       bool present = sdCardPresentProbe();
       LCD_busAcquire();
       if(!present){
@@ -173,13 +168,6 @@ static bool sanitizeDir(const String& dir, String& outPrefix){
   return true;
 }
 
-// Reads a File32 entry's long file name into a String.
-static String entryName(File32& f){
-  char buf[300];
-  f.getName(buf, sizeof(buf));
-  return String(buf);
-}
-
 // Deletes a logical file regardless of how it's stored: a single plain file,
 // or - for anything that outgrew SD_PART_MAX_BYTES during upload - a
 // manifest plus a run of hidden numbered part files. Returns true if
@@ -188,21 +176,21 @@ static bool removeLogicalFile(const String& dirPrefix, const String& baseName){
   bool existed = false;
 
   String plain = dirPrefix + "/" + baseName;
-  if(sd.exists(plain)){
-    sd.remove(plain);
+  if(SD.exists(plain)){
+    SD.remove(plain);
     existed = true;
   }
 
   String mPath = manifestPath(dirPrefix, baseName);
-  if(sd.exists(mPath)){
-    sd.remove(mPath);
+  if(SD.exists(mPath)){
+    SD.remove(mPath);
     existed = true;
     for(int i = 1; ; i++){
       String p = partPath(dirPrefix, baseName, i);
-      if(!sd.exists(p)){
+      if(!SD.exists(p)){
         break;
       }
-      sd.remove(p);
+      SD.remove(p);
     }
   }
 
@@ -211,27 +199,27 @@ static bool removeLogicalFile(const String& dirPrefix, const String& baseName){
 
 // Recursively removes a folder and everything inside it. Caller holds the SD bus.
 static bool removeDirRecursive(const String& path){
-  File32 dir = sd.open(path, O_RDONLY);
+  File dir = SD.open(path);
   if(!dir){
     return false;
   }
-  if(!dir.isDir()){
+  if(!dir.isDirectory()){
     dir.close();
     return false;
   }
-  for(File32 entry = dir.openNextFile(); entry; entry = dir.openNextFile()){
-    String n = entryName(entry);
-    bool isDir = entry.isDir();
+  for(File entry = dir.openNextFile(); entry; entry = dir.openNextFile()){
+    String n = String(entry.name());
+    bool isDir = entry.isDirectory();
     entry.close();
     String childPath = path + "/" + n;
     if(isDir){
       removeDirRecursive(childPath);
     }else{
-      sd.remove(childPath);
+      SD.remove(childPath);
     }
   }
   dir.close();
-  return sd.rmdir(path);
+  return SD.rmdir(path);
 }
 
 // Return the names in "dir" joined with '|', each as "name:size" for a file
@@ -251,11 +239,11 @@ String SDSTOR_list(String dir){
   LCD_busRelease();
 
   // Pass 1: split files, represented by their hidden manifest.
-  File32 root = sd.open(openPath, O_RDONLY);
+  File root = SD.open(openPath);
   if(root){
-    for(File32 entry = root.openNextFile(); entry; entry = root.openNextFile()){
-      String n = entryName(entry);
-      if(!entry.isDir() && n.length() > 0 && n[0] == '.' && n.endsWith(SD_MANIFEST_SUFFIX)){
+    for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
+      String n = String(entry.name());
+      if(!entry.isDirectory() && n.length() > 0 && n[0] == '.' && n.endsWith(SD_MANIFEST_SUFFIX)){
         String total = "";
         while(entry.available()){
           char c = (char)entry.read();
@@ -276,15 +264,15 @@ String SDSTOR_list(String dir){
   }
 
   // Pass 2: plain files (anything starting with '.' is an internal part/manifest).
-  root = sd.open(openPath, O_RDONLY);
+  root = SD.open(openPath);
   if(root){
-    for(File32 entry = root.openNextFile(); entry; entry = root.openNextFile()){
-      String n = entryName(entry);
-      if(!entry.isDir() && !(n.length() > 0 && n[0] == '.')){
+    for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
+      String n = String(entry.name());
+      if(!entry.isDirectory() && !(n.length() > 0 && n[0] == '.')){
         if(result.length() > 0){
           result += "|";
         }
-        result += n + ":" + String(entry.fileSize());
+        result += n + ":" + String(entry.size());
       }
       entry.close();
     }
@@ -292,11 +280,11 @@ String SDSTOR_list(String dir){
   }
 
   // Pass 3: subfolders.
-  root = sd.open(openPath, O_RDONLY);
+  root = SD.open(openPath);
   if(root){
-    for(File32 entry = root.openNextFile(); entry; entry = root.openNextFile()){
-      String n = entryName(entry);
-      if(entry.isDir() && !(n.length() > 0 && n[0] == '.')){
+    for(File entry = root.openNextFile(); entry; entry = root.openNextFile()){
+      String n = String(entry.name());
+      if(entry.isDirectory() && !(n.length() > 0 && n[0] == '.')){
         if(result.length() > 0){
           result += "|";
         }
@@ -326,7 +314,7 @@ bool SDSTOR_mkdir(String dir, String name){
     return false;
   }
   LCD_busRelease();
-  bool ok = sd.mkdir(dirPrefix + "/" + leaf);
+  bool ok = SD.mkdir(dirPrefix + "/" + leaf);
   LCD_busAcquire();
   return ok;
 }
@@ -343,7 +331,7 @@ static bool sendSplitFile(const String& dirPrefix, const String& baseName, const
   static uint8_t buf[512];
   for(int i = 1; ; i++){
     LCD_busRelease();
-    File32 f = sd.open(partPath(dirPrefix, baseName, i), O_RDONLY);
+    File f = SD.open(partPath(dirPrefix, baseName, i));
     LCD_busAcquire();
     if(!f){
       break;   // no more parts
@@ -378,7 +366,7 @@ bool SDSTOR_sendRaw(String dir, String name, WebServer* server){
   String path = dirPrefix + "/" + baseName;
 
   LCD_busRelease();
-  bool isSplit = sd.exists(manifestPath(dirPrefix, baseName));
+  bool isSplit = SD.exists(manifestPath(dirPrefix, baseName));
   LCD_busAcquire();
 
   if(isSplit){
@@ -386,14 +374,14 @@ bool SDSTOR_sendRaw(String dir, String name, WebServer* server){
   }
 
   LCD_busRelease();
-  File32 f = sd.open(path, O_RDONLY);
+  File f = SD.open(path);
   LCD_busAcquire();
   if(!f){
     return false;
   }
 
   server->sendHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
-  server->setContentLength(f.fileSize());
+  server->setContentLength(f.size());
   server->send(200, "application/octet-stream", "");
 
   static uint8_t buf[512];
@@ -429,9 +417,9 @@ bool SDSTOR_sendPreview(String dir, String name, uint32_t maxBytes, WebServer* s
   }
 
   LCD_busRelease();
-  bool isSplit = sd.exists(manifestPath(dirPrefix, baseName));
+  bool isSplit = SD.exists(manifestPath(dirPrefix, baseName));
   String path = isSplit ? partPath(dirPrefix, baseName, 1) : (dirPrefix + "/" + baseName);
-  File32 f = sd.open(path, O_RDONLY);
+  File f = SD.open(path);
   LCD_busAcquire();
   if(!f){
     return false;
@@ -463,7 +451,7 @@ bool SDSTOR_sendPreview(String dir, String name, uint32_t maxBytes, WebServer* s
 }
 
 // --- Incremental upload to SD ---
-static File32 uploadFile;
+static File uploadFile;
 static String uploadDirPrefix;    // absolute folder prefix ("" for root), resolved at writeBegin
 static String uploadBaseName;     // logical name, no leading slash (e.g. "foo.bin")
 static uint64_t uploadPartBytes;  // bytes written to the currently open plain/part file
@@ -504,7 +492,7 @@ bool SDSTOR_writeBegin(String dir, String name){
   String path = dirPrefix + "/" + baseName;
   LCD_busRelease();
   removeLogicalFile(uploadDirPrefix, uploadBaseName);   // drop any previous version, split or not
-  uploadFile = sd.open(path, O_WRONLY | O_CREAT | O_TRUNC);
+  uploadFile = SD.open(path, FILE_WRITE);
   if(!uploadFile){
     LCD_busAcquire();
     uploadErr = "Cannot open " + path + " for write";
@@ -520,13 +508,13 @@ static bool rollToNextPart(void){
   uploadFile.close();
 
   if(uploadPartIndex == 0){
-    sd.rename(uploadDirPrefix + "/" + uploadBaseName, partPath(uploadDirPrefix, uploadBaseName, 1));
+    SD.rename(uploadDirPrefix + "/" + uploadBaseName, partPath(uploadDirPrefix, uploadBaseName, 1));
     uploadPartIndex = 1;
   }
 
   uploadPartIndex++;
   String next = partPath(uploadDirPrefix, uploadBaseName, uploadPartIndex);
-  uploadFile = sd.open(next, O_WRONLY | O_CREAT | O_TRUNC);
+  uploadFile = SD.open(next, FILE_WRITE);
   uploadPartBytes = 0;
   if(!uploadFile){
     uploadErr = "Cannot open " + next + " for write";
@@ -566,7 +554,7 @@ bool SDSTOR_writeChunk(const uint8_t* buf, size_t len){
         while(wrote < want && retries < 5){
           delay(300);
           uploadFile.close();
-          uploadFile = sd.open(currentUploadPath(), O_WRONLY | O_CREAT | O_APPEND);
+          uploadFile = SD.open(currentUploadPath(), FILE_APPEND);
           if(!uploadFile){
             retries++;
             continue;
@@ -605,7 +593,7 @@ bool SDSTOR_writeEnd(void){
     // File was split: the manifest is only written now that the final total
     // is known, so an interrupted upload never leaves a manifest behind
     // pointing at an incomplete part run.
-    File32 mf = sd.open(manifestPath(uploadDirPrefix, uploadBaseName), O_WRONLY | O_CREAT | O_TRUNC);
+    File mf = SD.open(manifestPath(uploadDirPrefix, uploadBaseName), FILE_WRITE);
     if(mf){
       mf.println(String((unsigned long long)uploadTotalBytes));
       mf.close();
@@ -633,8 +621,8 @@ bool SDSTOR_delete(String dir, String name){
 
   LCD_busRelease();
   String path = dirPrefix + "/" + baseName;
-  File32 entry = sd.open(path, O_RDONLY);
-  bool isDir = entry && entry.isDir();
+  File entry = SD.open(path);
+  bool isDir = entry && entry.isDirectory();
   if(entry){
     entry.close();
   }
@@ -645,7 +633,7 @@ bool SDSTOR_delete(String dir, String name){
 
 // Moves a file named "name" from "srcDir" into "destDir". Fails (no changes
 // made) if destDir doesn't exist or already has an entry called "name" -
-// this never overwrites, unlike upload. sd.rename() is metadata-only on
+// this never overwrites, unlike upload. SD.rename() is metadata-only on
 // FAT, so this doesn't copy file data even for a multi-part split file.
 bool SDSTOR_move(String srcDir, String name, String destDir){
   if(!cardReady){
@@ -665,8 +653,8 @@ bool SDSTOR_move(String srcDir, String name, String destDir){
 
   LCD_busRelease();
 
-  File32 destDirFile = sd.open(destPrefix.length() ? destPrefix : "/", O_RDONLY);
-  bool destOk = destDirFile && destDirFile.isDir();
+  File destDirFile = SD.open(destPrefix.length() ? destPrefix : "/");
+  bool destOk = destDirFile && destDirFile.isDirectory();
   if(destDirFile){
     destDirFile.close();
   }
@@ -676,24 +664,24 @@ bool SDSTOR_move(String srcDir, String name, String destDir){
   }
 
   String destPlain = destPrefix + "/" + baseName;
-  if(sd.exists(destPlain) || sd.exists(manifestPath(destPrefix, baseName))){
+  if(SD.exists(destPlain) || SD.exists(manifestPath(destPrefix, baseName))){
     LCD_busAcquire();
     return false;   // destination name already taken
   }
 
   bool ok;
-  if(sd.exists(manifestPath(srcPrefix, baseName))){
-    ok = sd.rename(manifestPath(srcPrefix, baseName), manifestPath(destPrefix, baseName));
+  if(SD.exists(manifestPath(srcPrefix, baseName))){
+    ok = SD.rename(manifestPath(srcPrefix, baseName), manifestPath(destPrefix, baseName));
     for(int i = 1; ok; i++){
       String srcPart = partPath(srcPrefix, baseName, i);
-      if(!sd.exists(srcPart)){
+      if(!SD.exists(srcPart)){
         break;
       }
-      ok = sd.rename(srcPart, partPath(destPrefix, baseName, i));
+      ok = SD.rename(srcPart, partPath(destPrefix, baseName, i));
     }
   }else{
     String srcPlain = srcPrefix + "/" + baseName;
-    ok = sd.exists(srcPlain) && sd.rename(srcPlain, destPlain);
+    ok = SD.exists(srcPlain) && SD.rename(srcPlain, destPlain);
   }
 
   LCD_busAcquire();
@@ -702,7 +690,7 @@ bool SDSTOR_move(String srcDir, String name, String destDir){
 
 // Renames a file or folder "oldName" to "newName", both inside "dir". Fails
 // (no changes made) if "newName" is already taken. A folder rename is a
-// single metadata-only sd.rename() - its contents are addressed relative to
+// single metadata-only SD.rename() - its contents are addressed relative to
 // it, so they're unaffected. A file rename renames the manifest and every
 // numbered part too, same as SDSTOR_move().
 bool SDSTOR_rename(String dir, String oldName, String newName){
@@ -727,31 +715,31 @@ bool SDSTOR_rename(String dir, String oldName, String newName){
   String oldPath = dirPrefix + "/" + oldBase;
   String newPath = dirPrefix + "/" + newBase;
 
-  File32 entry = sd.open(oldPath, O_RDONLY);
-  bool isDir = entry && entry.isDir();
+  File entry = SD.open(oldPath);
+  bool isDir = entry && entry.isDirectory();
   if(entry){
     entry.close();
   }
 
-  if(sd.exists(newPath) || sd.exists(manifestPath(dirPrefix, newBase))){
+  if(SD.exists(newPath) || SD.exists(manifestPath(dirPrefix, newBase))){
     LCD_busAcquire();
     return false;   // destination name already taken
   }
 
   bool ok;
   if(isDir){
-    ok = sd.rename(oldPath, newPath);
-  }else if(sd.exists(manifestPath(dirPrefix, oldBase))){
-    ok = sd.rename(manifestPath(dirPrefix, oldBase), manifestPath(dirPrefix, newBase));
+    ok = SD.rename(oldPath, newPath);
+  }else if(SD.exists(manifestPath(dirPrefix, oldBase))){
+    ok = SD.rename(manifestPath(dirPrefix, oldBase), manifestPath(dirPrefix, newBase));
     for(int i = 1; ok; i++){
       String oldPart = partPath(dirPrefix, oldBase, i);
-      if(!sd.exists(oldPart)){
+      if(!SD.exists(oldPart)){
         break;
       }
-      ok = sd.rename(oldPart, partPath(dirPrefix, newBase, i));
+      ok = SD.rename(oldPart, partPath(dirPrefix, newBase, i));
     }
   }else{
-    ok = sd.exists(oldPath) && sd.rename(oldPath, newPath);
+    ok = SD.exists(oldPath) && SD.rename(oldPath, newPath);
   }
 
   LCD_busAcquire();
@@ -778,7 +766,7 @@ bool SDSTOR_eject(void){
     return false;
   }
   LCD_busRelease();
-  sd.end();
+  SD.end();
   LCD_busAcquire();
   cardReady = false;
   ejected = true;
@@ -786,21 +774,32 @@ bool SDSTOR_eject(void){
 }
 
 // Force a fresh FAT filesystem onto the card, wiping all data - this is what
-// actually fixes a "faulty" (unreadable filesystem) card.
+// actually fixes a "faulty" (unreadable filesystem) card. sdcard_mount()'s
+// own format_if_empty only kicks in when there's no filesystem at all, so a
+// direct f_mkfs() is used here to reformat regardless of current contents.
 bool SDSTOR_format(void){
   if(uploadFile){
     uploadFile.close();
   }
   LCD_busRelease();
-  sd.end();
+  SD.end();
 
-  bool mounted = false;
+  bool ok = false;
   if(sdCardPresentProbe()){
-    if(sd.cardBegin(sdSpiConfig())){
-      sd.format();
-      mounted = sd.begin(sdSpiConfig());
+    uint8_t pdrv = sdcard_init(SD_CS, &SPI, SD_SPI_FREQ);
+    if(pdrv != 0xFF){
+      char drv[3] = {(char)('0' + pdrv), ':', 0};
+      BYTE *work = (BYTE*)malloc(FF_MAX_SS);
+      if(work){
+        MKFS_PARM opt = {(BYTE)FM_ANY, 0, 0, 0, 0};
+        ok = (f_mkfs(drv, &opt, work, FF_MAX_SS) == FR_OK);
+        free(work);
+      }
+      sdcard_uninit(pdrv);
     }
   }
+
+  bool mounted = ok && SD.begin(SD_CS, SPI, SD_SPI_FREQ);
   LCD_busAcquire();
 
   cardReady = mounted;
@@ -815,10 +814,10 @@ String SDSTOR_getSpaceInfo(void){
     return "";
   }
   LCD_busRelease();
-  uint64_t bytesPerCluster = sd.bytesPerCluster();
-  uint64_t total = bytesPerCluster * sd.clusterCount();
-  uint64_t free = bytesPerCluster * (uint32_t)sd.freeClusterCount();
+  uint64_t total = SD.totalBytes();
+  uint64_t used = SD.usedBytes();
   LCD_busAcquire();
+  uint64_t free = (total > used) ? (total - used) : 0;
   return String(total) + ":" + String(free);
 }
 
@@ -829,7 +828,7 @@ bool SDSTOR_readTextFile(const String& path, String& outContent){
     return false;
   }
   LCD_busRelease();
-  File32 f = sd.open(path, O_RDONLY);
+  File f = SD.open(path);
   bool ok = (bool)f;
   if(ok){
     outContent = "";
@@ -847,10 +846,10 @@ bool SDSTOR_writeTextFile(const String& path, const String& content){
     return false;
   }
   LCD_busRelease();
-  if(sd.exists(path)){
-    sd.remove(path);
+  if(SD.exists(path)){
+    SD.remove(path);
   }
-  File32 f = sd.open(path, O_WRONLY | O_CREAT | O_TRUNC);
+  File f = SD.open(path, FILE_WRITE);
   bool ok = (bool)f;
   if(ok){
     f.write((const uint8_t*)content.c_str(), content.length());
