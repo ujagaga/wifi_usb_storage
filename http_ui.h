@@ -80,7 +80,13 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
   function downloadUpdate(){
     showStatus('Downloading firmware update...', 'info');
     fetch('/downloadupdate').then(function(r){
-      return r.text().then(function(t){ showStatus(t, r.ok ? 'ok' : 'err'); });
+      return r.text().then(function(t){
+        showStatus(t, r.ok ? 'ok' : 'err');
+        if(r.ok && typeof loadFiles === 'function'){
+          loadFiles();
+          refreshSpace();
+        }
+      });
     }).catch(function(e){ showStatus('Download error: ' + e.message, 'err'); });
   }
   function applyUpdate(){

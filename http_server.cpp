@@ -48,7 +48,7 @@ void showStartPage() {
   String response = pageStart();
   response += FPSTR(INDEX_HTML_0);
   response += FPSTR(NAV_HTML);
-  response += "<p class='ip' id='status'>Station IP: " + WIFIC_getStationIp() + ".....v" + VERSION + "</p>";
+  response += "<p class='ip' id='status'>Station IP: " + WIFIC_getStationIp() + " - v" + VERSION + "</p>";
   if(SDSTOR_isReady()){
     response += FPSTR(INDEX_HTML_1);
   }else if(SDSTOR_isFaulty()){

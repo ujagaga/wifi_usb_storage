@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define VERSION "1.1.0"
+#define VERSION "1.2.0"
 
 // Where the device checks for a newer firmware version: a plain text file
 // holding just the version string, fetched over HTTPS. Checked once the
