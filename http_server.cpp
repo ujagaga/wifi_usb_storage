@@ -301,6 +301,16 @@ static void downloadUpdate(void){
   }
 }
 
+static void applyUpdate(void){
+  if(!UPDATE_CHECK_applyFromSD()){
+    webServer->send(400, "text/plain", UPDATE_CHECK_lastError());
+    return;
+  }
+  webServer->send(200, "text/plain", "Update applied. Rebooting...");
+  delay(500);
+  ESP.restart();
+}
+
 static void wifiRssi(void){
   webServer->send(200, "text/plain", String(WIFIC_getRssi()));
 }
@@ -352,6 +362,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/api/sdspace", HTTP_GET, sdSpace);
   webServer->on("/api/updatecheck", HTTP_GET, updateCheckInfo);
   webServer->on("/downloadupdate", HTTP_GET, downloadUpdate);
+  webServer->on("/applyupdate", HTTP_GET, applyUpdate);
   webServer->on("/api/rssi", HTTP_GET, wifiRssi);
   webServer->on("/eject", HTTP_GET, ejectSD);
   webServer->on("/format", HTTP_GET, formatSD);

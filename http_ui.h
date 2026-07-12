@@ -57,6 +57,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
       <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
       <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
       <button id="menuDownloadUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); downloadUpdate();">Download Update</button>
+      <button id="menuApplyUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); applyUpdate();">Apply Update (Reboot)</button>
     </div>
   </div>
 </div>
@@ -69,7 +70,10 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
     if(typeof formatSD !== 'function'){ document.getElementById('menuFormat').style.display='none'; }
     if(typeof showStatus === 'function'){
       fetch('/api/updatecheck').then(function(r){ return r.text(); }).then(function(v){
-        if(v.trim()){ document.getElementById('menuDownloadUpdate').style.display='block'; }
+        if(v.trim()){
+          document.getElementById('menuDownloadUpdate').style.display='block';
+          document.getElementById('menuApplyUpdate').style.display='block';
+        }
       }).catch(function(){});
     }
   });
@@ -78,6 +82,16 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
     fetch('/downloadupdate').then(function(r){
       return r.text().then(function(t){ showStatus(t, r.ok ? 'ok' : 'err'); });
     }).catch(function(e){ showStatus('Download error: ' + e.message, 'err'); });
+  }
+  function applyUpdate(){
+    if(!confirm('This will overwrite the current firmware and reboot the device. Download Update first if you have not already. Continue?')){ return; }
+    showStatus('Applying update...', 'info');
+    fetch('/applyupdate').then(function(r){
+      return r.text().then(function(t){
+        showStatus(t, r.ok ? 'ok' : 'err');
+        if(r.ok){ setTimeout(function(){ location.reload(); }, 8000); }
+      });
+    }).catch(function(e){ showStatus('Apply error: ' + e.message, 'err'); });
   }
 </script>
 )NAV";

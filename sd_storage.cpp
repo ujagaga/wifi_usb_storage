@@ -4,6 +4,7 @@
 #include <sd_diskio.h>   // raw card init (sdcard_init/sdcard_uninit), bypasses the filesystem
 #include <diskio.h>      // disk_initialize() - talks SD protocol directly (DSTATUS/STA_NOINIT)
 #include <ff.h>          // f_mkfs() - force a fresh FAT filesystem, used by SDSTOR_format()
+#include <Update.h>      // flashes a staged firmware image, used by SDSTOR_applyFirmwareUpdate()
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
@@ -854,6 +855,76 @@ bool SDSTOR_writeTextFile(const String& path, const String& content){
   if(ok){
     f.write((const uint8_t*)content.c_str(), content.length());
     f.close();
+  }
+  LCD_busAcquire();
+  return ok;
+}
+
+// Flashes a firmware image staged on SD into the inactive OTA partition.
+// Does not reboot - caller decides when (e.g. after sending an HTTP
+// response). CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE is on by default for this
+// board, so if the new image never confirms itself valid (see
+// esp_ota_mark_app_valid_cancel_rollback() in the .ino), the bootloader
+// automatically falls back to the previous partition on the next reset.
+bool SDSTOR_applyFirmwareUpdate(const String& path, const String& expectedMd5, String& outError){
+  if(!cardReady){
+    outError = "SD card not ready";
+    return false;
+  }
+  LCD_busRelease();
+  File f = SD.open(path);
+  if(!f){
+    LCD_busAcquire();
+    outError = "Cannot open " + path;
+    return false;
+  }
+  size_t fileSize = f.size();
+  if(fileSize == 0){
+    f.close();
+    LCD_busAcquire();
+    outError = "Firmware file is empty";
+    return false;
+  }
+  if(!Update.begin(fileSize, U_FLASH)){
+    f.close();
+    LCD_busAcquire();
+    outError = String("Update.begin failed: ") + Update.errorString();
+    return false;
+  }
+  if(expectedMd5.length() > 0 && !Update.setMD5(expectedMd5.c_str())){
+    f.close();
+    Update.abort();
+    LCD_busAcquire();
+    outError = "Invalid expected MD5: " + expectedMd5;
+    return false;
+  }
+
+  static uint8_t buf[1024];
+  size_t written = 0;
+  bool ok = true;
+  while(written < fileSize){
+    int got = f.read(buf, sizeof(buf));
+    if(got <= 0){
+      ok = false;
+      outError = "SD read failed at " + String(written) + " of " + String(fileSize);
+      break;
+    }
+    size_t wrote = Update.write(buf, got);
+    if(wrote != (size_t)got){
+      ok = false;
+      outError = String("Flash write failed: ") + Update.errorString();
+      break;
+    }
+    written += wrote;
+  }
+  f.close();
+
+  if(ok && !Update.end(true)){
+    ok = false;
+    outError = String("Update.end failed: ") + Update.errorString();
+  }
+  if(!ok){
+    Update.abort();
   }
   LCD_busAcquire();
   return ok;

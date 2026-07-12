@@ -15,32 +15,49 @@ static bool everChecked = false;
 static uint32_t lastCheckMs = 0;
 static bool updateAvailable = false;
 static String latestVersion = "";
+static String latestMd5 = "";
 static String lastErr = "";
 
 String UPDATE_CHECK_lastError(void){
   return lastErr;
 }
 
-// No cert pinning - this only compares a version string, so a MITM could at
-// worst lie about whether an update exists, not push code. Revisit once this
-// starts fetching/flashing an actual firmware image.
+// No cert pinning, so a MITM could lie about whether an update exists or
+// swap in a different MD5/version - but not silently corrupt a legitimate
+// update, since SDSTOR_applyFirmwareUpdate() verifies the flashed content's
+// MD5 against latestMd5 before ever activating the new partition.
 static void doCheck(void){
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient https;
-  if(!https.begin(client, UPDATE_VERSION_URL)){
-    return;
-  }
-  int code = https.GET();
-  if(code == HTTP_CODE_OK){
-    String remote = https.getString();
-    remote.trim();
-    if(remote.length() > 0){
-      latestVersion = remote;
-      updateAvailable = (remote != VERSION);
+  if(https.begin(client, UPDATE_VERSION_URL)){
+    int code = https.GET();
+    if(code == HTTP_CODE_OK){
+      String remote = https.getString();
+      remote.trim();
+      if(remote.length() > 0){
+        latestVersion = remote;
+        updateAvailable = (remote != VERSION);
+      }
     }
+    https.end();
   }
-  https.end();
+
+  WiFiClientSecure client2;
+  client2.setInsecure();
+  HTTPClient https2;
+  if(https2.begin(client2, UPDATE_MD5_URL)){
+    int code = https2.GET();
+    if(code == HTTP_CODE_OK){
+      String remote = https2.getString();
+      remote.trim();
+      remote.toLowerCase();
+      if(remote.length() == 32){
+        latestMd5 = remote;
+      }
+    }
+    https2.end();
+  }
 }
 
 void UPDATE_CHECK_init(void){
@@ -107,10 +124,15 @@ bool UPDATE_CHECK_downloadToSD(void){
   uint8_t buf[1024];
   int written = 0;
   bool ok = true;
-  while(https.connected() && (total < 0 || written < total)){
+  // Keep draining as long as the connection is open OR there's still
+  // buffered data to read - checking only https.connected() can be false
+  // right after the server closes the socket while decrypted data for the
+  // tail of the response is still sitting in the TLS receive buffer,
+  // silently truncating the download.
+  while(total < 0 || written < total){
     size_t avail = stream->available();
     if(avail == 0){
-      if(!stream->connected()){
+      if(!https.connected()){
         break;
       }
       delay(1);
@@ -141,4 +163,10 @@ bool UPDATE_CHECK_downloadToSD(void){
   }
   https.end();
   return ok;
+}
+
+bool UPDATE_CHECK_applyFromSD(void){
+  lastErr = "";
+  String path = String("/") + UPDATE_FIRMWARE_FILENAME;
+  return SDSTOR_applyFirmwareUpdate(path, latestMd5, lastErr);
 }

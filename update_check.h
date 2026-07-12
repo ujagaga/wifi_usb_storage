@@ -14,4 +14,8 @@ extern String UPDATE_CHECK_getLatestVersion(void); // the version string last fe
 extern bool UPDATE_CHECK_downloadToSD(void);
 extern String UPDATE_CHECK_lastError(void);
 
+// Flashes the staged firmware image from SD. Does NOT reboot - caller must
+// do that (e.g. after sending an HTTP response) for the new image to run.
+extern bool UPDATE_CHECK_applyFromSD(void);
+
 #endif

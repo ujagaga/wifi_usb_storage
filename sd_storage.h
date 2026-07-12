@@ -24,6 +24,10 @@ extern bool SDSTOR_format(void);           // wipe the card and lay down a fresh
 extern String SDSTOR_getSpaceInfo(void);   // "total:free" bytes, or "" if no card is mounted
 extern bool SDSTOR_readTextFile(const String& path, String& outContent);   // whole-file read; path is absolute (e.g. "/config.txt")
 extern bool SDSTOR_writeTextFile(const String& path, const String& content); // overwrite/create
+// Flashes a firmware image staged on SD (path is absolute) into the inactive
+// OTA partition; does NOT reboot. If expectedMd5 is non-empty, the flashed
+// content's MD5 must match it or the update is aborted before activation.
+extern bool SDSTOR_applyFirmwareUpdate(const String& path, const String& expectedMd5, String& outError);
 extern String SDSTOR_list(String dir);     // "name:size|name:size|...", dirs reported as "name/:0"
 extern bool SDSTOR_mkdir(String dir, String name);
 extern bool SDSTOR_sendRaw(String dir, String name, WebServer* server);  // stream file to HTTP client

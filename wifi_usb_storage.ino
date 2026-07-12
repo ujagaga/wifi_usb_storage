@@ -1,3 +1,4 @@
+#include <esp_ota_ops.h>
 #include "wifi_connection.h"
 #include "config.h"
 #include "http_server.h"
@@ -91,6 +92,11 @@ void setup(void)
   WIFIC_init();
   HTTP_SERVER_init();
   UPDATE_CHECK_init();
+  // Reached without crashing/hanging: this boot is good. Cancels any pending
+  // rollback so the bootloader keeps booting this partition. If setup() had
+  // instead crashed (e.g. a bad flashed image), this line never runs and the
+  // bootloader auto-reverts to the previous partition on the next reset.
+  esp_ota_mark_app_valid_cancel_rollback();
   display_ap_info();
 }
 
