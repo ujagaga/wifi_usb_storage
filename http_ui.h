@@ -597,12 +597,13 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   }
   function uploadOne(file, label, row, batch){
     return new Promise(function(resolve){
-      var fd=new FormData();
-      fd.append('f', file, file.name);
       showStatus(label + 'uploading ' + file.name + '...', 'info');
       var xhr=new XMLHttpRequest();
       currentUploadXhr = xhr;
-      xhr.open('POST', '/upload?dir=' + encodeURIComponent(currentDir));
+      xhr.open('POST', '/upload');
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.setRequestHeader('X-Dir', encodeURIComponent(currentDir));
+      xhr.setRequestHeader('X-Name', encodeURIComponent(file.name));
       var lastLoaded=0, lastTime=Date.now();
       xhr.upload.onprogress=function(e){
         if(!e.lengthComputable){ return; }
@@ -623,7 +624,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       };
       xhr.onerror=function(){ currentUploadXhr = null; showStatus('Upload error', 'err'); resolve('err'); };
       xhr.onabort=function(){ currentUploadXhr = null; resolve('stopped'); };
-      xhr.send(fd);
+      xhr.send(file);
     });
   }
   function uploadFiles(list){

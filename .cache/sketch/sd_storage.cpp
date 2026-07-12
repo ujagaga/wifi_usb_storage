@@ -524,6 +524,13 @@ static bool rollToNextPart(void){
   return true;
 }
 
+static String currentUploadPath(void){
+  if(uploadPartIndex == 0){
+    return uploadDirPrefix + "/" + uploadBaseName;
+  }
+  return partPath(uploadDirPrefix, uploadBaseName, uploadPartIndex);
+}
+
 bool SDSTOR_writeChunk(const uint8_t* buf, size_t len){
   if(!uploadFile){
     return false;
@@ -538,8 +545,29 @@ bool SDSTOR_writeChunk(const uint8_t* buf, size_t len){
     }
     if(want > 0){
       size_t wrote = uploadFile.write(buf + offset, want);
+      if(wrote < want){
+        // A brief SD stall (wear-leveling/cache flush) can leave the
+        // underlying stdio stream latched in an error state, where every
+        // further write() on the SAME handle keeps failing even after the
+        // card recovers. Closing and reopening for append clears that
+        // latched state and continues from the correct offset.
+        int retries = 0;
+        while(wrote < want && retries < 5){
+          delay(300);
+          uploadFile.close();
+          uploadFile = SD.open(currentUploadPath(), FILE_APPEND);
+          if(!uploadFile){
+            retries++;
+            continue;
+          }
+          size_t more = uploadFile.write(buf + offset + wrote, want - wrote);
+          wrote += more;
+          retries = (more == 0) ? (retries + 1) : 0;
+        }
+      }
       if(wrote != want){
-        uploadErr = "SD write failed (wrote " + String(wrote) + " of " + String(want) + ")";
+        uploadErr = "SD write failed (wrote " + String(wrote) + " of " + String(want) +
+          ", total=" + String((unsigned long long)uploadTotalBytes) + ")";
         return false;
       }
       uploadPartBytes += wrote;

@@ -225,20 +225,30 @@ static void mkdirHandler(void){
 
 static bool uploadOk = false;
 
-// Streams a multipart file upload straight to the SD card, chunk by chunk.
+// Streams the raw upload body straight to the SD card, chunk by chunk. The
+// client sends a non-multipart body (see uploadOne() in http_ui.h) so the
+// WebServer library takes its "raw" fast path (plain client.readBytes()
+// chunks) instead of its multipart parser, which reads the body one byte at
+// a time and is far too slow for large files. Folder/filename travel as
+// request headers (collected in HTTP_SERVER_init) since raw-mode requests
+// don't get their query string parsed into webServer->arg().
 static void uploadFile_handler(void){
   if(!SDSTOR_isReady()){
     uploadOk = false;
     return;
   }
-  HTTPUpload& up = webServer->upload();
-  if(up.status == UPLOAD_FILE_START){
-    uploadOk = SDSTOR_writeBegin(webServer->arg("dir"), up.filename);
-  }else if(up.status == UPLOAD_FILE_WRITE){
+  HTTPRaw& raw = webServer->raw();
+  if(raw.status == RAW_START){
+    String dir = WebServer::urlDecode(webServer->header("X-Dir"));
+    String name = WebServer::urlDecode(webServer->header("X-Name"));
+    uploadOk = SDSTOR_writeBegin(dir, name);
+  }else if(raw.status == RAW_WRITE){
     if(uploadOk){
-      uploadOk = SDSTOR_writeChunk(up.buf, up.currentSize);
+      uploadOk = SDSTOR_writeChunk(raw.buf, raw.currentSize);
     }
-  }else if(up.status == UPLOAD_FILE_END){
+    yield();   // the raw read/write loop never blocks on its own; without this,
+               // long uploads starve WiFi/watchdog housekeeping on this single-core chip
+  }else if(raw.status == RAW_END){
     if(uploadOk){
       uploadOk = SDSTOR_writeEnd();
     }else{
@@ -326,6 +336,9 @@ void HTTP_SERVER_init(void){
   webServer->on("/eject", HTTP_GET, ejectSD);
   webServer->on("/format", HTTP_GET, formatSD);
   webServer->onNotFound(showStartPage);
+
+  static const char* uploadHeaderKeys[] = {"X-Dir", "X-Name"};
+  webServer->collectHeaders(uploadHeaderKeys, 2);
 
   webServer->begin();
 }
