@@ -921,7 +921,7 @@ bool SDSTOR_applyFirmwareUpdate(const String& path, const String& expectedMd5, S
 
   if(ok && !Update.end(true)){
     ok = false;
-    outError = String("Update.end failed: ") + Update.errorString();
+    outError = String("Update.end failed: ") + Update.errorString() + ". Please re-download the update and try again.";
   }
   if(!ok){
     Update.abort();

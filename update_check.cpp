@@ -17,6 +17,7 @@ static bool updateAvailable = false;
 static String latestVersion = "";
 static String latestMd5 = "";
 static String lastErr = "";
+static String stagedFilename = "";  // name actually used for the last download, so apply reads back the same file
 
 String UPDATE_CHECK_lastError(void){
   return lastErr;
@@ -84,10 +85,11 @@ String UPDATE_CHECK_getLatestVersion(void){
   return latestVersion;
 }
 
-// Streams the new firmware image straight to SD (UPDATE_FIRMWARE_FILENAME at
-// root) via the same chunked-write path uploads use. Purely a file copy -
-// nothing here touches flash, so a failed/interrupted download just leaves a
-// partial (or no) file on the card, same as any other aborted upload.
+// Streams the new firmware image straight to SD, named
+// "firmware_update_<version>.bin" at root, via the same chunked-write path
+// uploads use. Purely a file copy - nothing here touches flash, so a
+// failed/interrupted download just leaves a partial (or no) file on the
+// card, same as any other aborted upload.
 bool UPDATE_CHECK_downloadToSD(void){
   lastErr = "";
   if(!WIFIC_stationConnected()){
@@ -114,7 +116,10 @@ bool UPDATE_CHECK_downloadToSD(void){
   }
   int total = https.getSize();   // -1 if unknown (chunked transfer)
 
-  if(!SDSTOR_writeBegin("", UPDATE_FIRMWARE_FILENAME)){
+  stagedFilename = latestVersion.length() > 0
+    ? ("firmware_update_" + latestVersion + ".bin")
+    : String(UPDATE_FIRMWARE_FILENAME);
+  if(!SDSTOR_writeBegin("", stagedFilename)){
     lastErr = "Cannot stage firmware file: " + SDSTOR_lastError();
     https.end();
     return false;
@@ -167,6 +172,10 @@ bool UPDATE_CHECK_downloadToSD(void){
 
 bool UPDATE_CHECK_applyFromSD(void){
   lastErr = "";
-  String path = String("/") + UPDATE_FIRMWARE_FILENAME;
+  if(stagedFilename.length() == 0){
+    lastErr = "No firmware downloaded yet";
+    return false;
+  }
+  String path = "/" + stagedFilename;
   return SDSTOR_applyFirmwareUpdate(path, latestMd5, lastErr);
 }

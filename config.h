@@ -10,7 +10,7 @@
 #define UPDATE_FIRMWARE_URL     "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/main/build/wifi_usb_storage.ino.bin"
 #define UPDATE_MD5_URL          "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/main/build/wifi_usb_storage.ino.bin.md5"
 #define UPDATE_CHECK_INTERVAL_MS (24UL * 60 * 60 * 1000UL)
-#define UPDATE_FIRMWARE_FILENAME "firmware_update.bin"  // staged on SD root before flashing
+#define UPDATE_FIRMWARE_FILENAME "firmware_update.bin"  // fallback name if the remote version is unknown; normally "firmware_update_<version>.bin"
 // Target board: Waveshare ESP32-C6-LCD-1.47 (ST7789, 172x320 IPS).
 // Uncomment to use the Adafruit driver instead of the bundled custom one.
 // The custom driver (ST7789_Custom.h) handles the 172x320 offsets and the
