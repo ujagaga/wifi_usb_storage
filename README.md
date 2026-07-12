@@ -8,7 +8,7 @@ and a small on-device status display.
 
 Waiting for a device with native USB support so I can make it behave like USB flash storage, so it can be used on a TV for playing videos while the video is being uploaded. Esentially a streaming feature for a non-smart TV.
 
-![Web UI screenshot](Screenshot.png)
+![Web UI screenshot](Screen.png)
 
 ## Hardware
 
