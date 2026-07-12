@@ -35,12 +35,19 @@ static bool requireSD(void){
 }
 
 // --- Page handlers ---
+// HTML_BEGIN plus a ":root" style block exposing the current UI theme colors
+// as CSS custom properties, so every page picks up config.txt's overrides.
+static String pageStart(void) {
+  String s = FPSTR(HTML_BEGIN);
+  s += "<style>:root{" + WIFIC_getThemeCSSVars() + "}</style>";
+  return s;
+}
+
 void showStartPage() {
-  String response = FPSTR(HTML_BEGIN);
+  String response = pageStart();
   response += FPSTR(INDEX_HTML_0);
   response += FPSTR(NAV_HTML);
-  response += "<h1>WiFi File Storage</h1>";
-  response += "<p class='ip'>Station IP: " + WIFIC_getStationIp() + "</p>";
+  response += "<p class='ip' id='status'>Station IP: " + WIFIC_getStationIp() + "</p>";
   if(SDSTOR_isReady()){
     response += FPSTR(INDEX_HTML_1);
   }else if(SDSTOR_isFaulty()){
@@ -55,7 +62,7 @@ void showStartPage() {
 
 
 static void showApiPage(void){
-  String response = FPSTR(HTML_BEGIN);
+  String response = pageStart();
   response += FPSTR(API_HTML_0);
   response += FPSTR(NAV_HTML);
   response += FPSTR(API_HTML_1);
@@ -68,7 +75,7 @@ static void showNotFound(void){
 }
 
 static void showStatusPage(bool goToHome = false) {
-  String response = FPSTR(HTML_BEGIN);
+  String response = pageStart();
   response += "<h1>Connection Status</h1><p>";
   response += MAIN_getStatusMsg() + "</p>";
   if(goToHome){
@@ -80,7 +87,7 @@ static void showStatusPage(bool goToHome = false) {
 
 static void selectAP(void) {
   WIFIC_startScan();   // kick off the scan; JS fetches /aplist ~10 s later
-  String response = FPSTR(HTML_BEGIN);
+  String response = pageStart();
   response += FPSTR(APLIST_HTML_0);
   response += FPSTR(NAV_HTML);
   response += FPSTR(APLIST_HTML_1);
@@ -96,6 +103,11 @@ static void setBrightness(void){
   if(val < 0){ val = 0; }
   if(val > 100){ val = 100; }
   WIFIC_setBrightness((uint8_t)val);
+  webServer->send(200, "text/plain", "OK");
+}
+
+static void toggleTheme(void){
+  WIFIC_toggleTheme();
   webServer->send(200, "text/plain", "OK");
 }
 
@@ -295,6 +307,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/api", HTTP_GET, showApiPage);
   webServer->on("/wifisave", HTTP_GET, saveWiFi);
   webServer->on("/brightness", HTTP_GET, setBrightness);
+  webServer->on("/theme", HTTP_GET, toggleTheme);
   webServer->on("/api/filelist", HTTP_GET, fileList);
   webServer->on("/download", HTTP_GET, downloadFile);
   webServer->on("/preview", HTTP_GET, previewFile);

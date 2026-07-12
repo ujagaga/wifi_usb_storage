@@ -44,11 +44,12 @@ Waiting for a device with native USB support so I can make it behave like USB fl
 - Upload, download, delete, move, and rename files (or folders) from the web
   UI or the HTTP API. Moving or renaming onto an already-taken name fails
   rather than silently overwriting.
-- `config.txt` holds the saved WiFi credentials and screen brightness (see
-  below) - it's a normal file, always sorted to the end of the file list and
-  shown in a distinct color so it's easy to recognize. Nothing stops it being
-  renamed/moved/deleted like any other file; doing so just means the device
-  falls back to RAM-only WiFi/brightness state until it's recreated.
+- `config.txt` holds the saved WiFi credentials, screen brightness, and UI
+  theme colors (see below) - it's a normal file, always sorted to the end of
+  the file list and shown in a distinct color so it's easy to recognize.
+  Nothing stops it being renamed/moved/deleted like any other file; doing so
+  just means the device falls back to RAM-only WiFi/brightness/theme state
+  until it's recreated.
 - **Hot-plug.** The card doesn't need to be present at boot, and can be
   inserted or removed while the device is running - the web UI updates
   itself automatically (polls status every few seconds and reloads).
@@ -71,13 +72,17 @@ Waiting for a device with native USB support so I can make it behave like USB fl
 
 ### Web UI
 - `/` - main page: station IP, folder-aware file list (breadcrumb trail,
-  New Folder button), upload (multi-file, into whichever folder is open),
-  Eject, and Format buttons. Folders sort first, then files alphabetically,
-  with `config.txt` always last and in a distinct color. When no SD card is
-  present, or it's faulty, this area is replaced with the relevant message
-  instead.
-  - **Right-click (or long-press) a row** for a context menu: Download,
-    Preview (images/text only), Move, Rename, Delete. Left-clicking a
+  New Folder button), upload (multi-file, into whichever folder is open).
+  Folders sort first, then files alphabetically, with `config.txt` always
+  last and in a distinct color. When no SD card is present, or it's faulty,
+  this area is replaced with the relevant message instead.
+  - The **&#9776; menu** in the nav bar (top right, present on every page)
+    has Toggle Theme, Eject SD Card, and Format SD Card. The latter two only
+    appear on the main page when a card is actually present.
+  - **Right-click (or long-press) a row**, or click the **`...`** button at
+    the row's right edge, for a context menu: Download, Preview (images/text
+    only), Move, Rename, Delete. The `...` button works with a mouse,
+    keyboard, or TV remote, without needing a right-click. Left-clicking a
     previewable file's name opens the preview directly.
   - **Preview panel** on the right (drops below the file list on narrow
     screens): renders images (`jpg jpeg png gif svg webp bmp ico`) or the
@@ -93,6 +98,32 @@ Waiting for a device with native USB support so I can make it behave like USB fl
   firmware, regardless of the slider's 0-100% label - see `LCD_setBacklight`
   in `lcd_display.cpp`).
 - `/api` - HTTP API reference page (see below).
+
+### UI theme colors
+The **Toggle Theme** entry in the nav bar's &#9776; menu switches between the
+dark (default) and light color presets below, persisting the choice to
+`config.txt` (`THEME=dark` or `THEME=light`).
+
+The web UI's colors are stored in `config.txt` as `KEY=#rrggbb` lines below
+the WiFi/brightness lines, each preceded by a `#` comment. Edit the file on
+a PC (with the SD card removed from the device) to customize:
+
+| Key | Default | Used for |
+|---|---|---|
+| `COLOR_BG` | `#11151c` | Page background |
+| `COLOR_CARD_BG` | `#1b212b` | Card/panel background |
+| `COLOR_BORDER` | `#232b37` | Card/table borders |
+| `COLOR_TEXT` | `#e6e9ef` | Main body text |
+| `COLOR_MUTED` | `#8b93a3` | Secondary/muted text |
+| `COLOR_ACCENT` | `#ff5a3c` | Primary button / active nav background |
+| `COLOR_ACCENT_HOVER` | `#ff6f55` | Primary button hover |
+| `COLOR_LINK` | `#ff7a5c` | Hyperlink color |
+| `COLOR_BTN` | `#2a3340` | Secondary button background |
+| `COLOR_BTN_HOVER` | `#37424f` | Secondary button hover |
+
+Missing or malformed lines fall back to the defaults above. Lines are
+rewritten (in RAM values) any time WiFi credentials or brightness are saved,
+so customized colors persist across those changes.
 
 ### HTTP API
 All file/folder endpoints below take an optional `dir` query param (a

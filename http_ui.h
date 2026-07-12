@@ -15,9 +15,10 @@ static const char HTML_BEGIN[] PROGMEM = R"(
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>WiFi File Storage</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1NzYgNTEyIj48IS0tISBGb250IEF3ZXNvbWUgRnJlZSA3LjMuMCBieSBAZm9udGF3ZXNvbWUgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbSBMaWNlbnNlIC0gaHR0cHM6Ly9mb250YXdlc29tZS5jb20vbGljZW5zZS9mcmVlIChJY29uczogQ0MgQlkgNC4wLCBGb250czogU0lMIE9GTCAxLjEsIENvZGU6IE1JVCBMaWNlbnNlKSBDb3B5cmlnaHQgMjAyNiBGb250aWNvbnMsIEluYy4gLS0+PHBhdGggZmlsbD0iY3VycmVudENvbG9yIiBkPSJNMTQ0IDQ4MGMtNzkuNSAwLTE0NC02NC41LTE0NC0xNDQgMC02My40IDQxLTExNy4yIDk3LjktMTM2LjUtMS4zLTcuNy0xLjktMTUuNS0xLjktMjMuNSAwLTc5LjUgNjQuNS0xNDQgMTQ0LTE0NCA1NS40IDAgMTAzLjUgMzEuMyAxMjcuNiA3Ny4xIDE0LjItOC4zIDMwLjgtMTMuMSA0OC40LTEzLjEgNTMgMCA5NiA0MyA5NiA5NiAwIDE1LjctMy44IDMwLjYtMTAuNSA0My43IDQ0IDIwLjMgNzQuNSA2NC43IDc0LjUgMTE2LjMgMCA3MC43LTU3LjMgMTI4LTEyOCAxMjhsLTMwNCAwek0zMDUgMTkxYy05LjQtOS40LTI0LjYtOS40LTMzLjkgMGwtNzIgNzJjLTkuNCA5LjQtOS40IDI0LjYgMCAzMy45czI0LjYgOS40IDMzLjkgMGwzMS0zMSAwIDEwMi4xYzAgMTMuMyAxMC43IDI0IDI0IDI0czI0LTEwLjcgMjQtMjRsMC0xMDIuMSAzMSAzMWM5LjQgOS40IDI0LjYgOS40IDMzLjkgMHM5LjQtMjQuNiAwLTMzLjlsLTcyLTcyeiIvPjwvc3ZnPg==">
     <style>
-      body { background:#11151c; color:#e6e9ef; font-family: system-ui, Arial, Helvetica, sans-serif; margin:0; }
-      a{ color:#ff7a5c; }
+      body { background:var(--bg); color:var(--text); font-family: system-ui, Arial, Helvetica, sans-serif; margin:0; }
+      a{ color:var(--link); }
       .contain{ width:100%; }
       .center_div{ margin:0 auto; width:92%; max-width:1100px; position:relative; padding:1.2rem 0 4.5rem; }
     </style>
@@ -30,63 +31,89 @@ static const char HTML_END[] PROGMEM = "</body></html>";
 // Shared top navigation bar. Inserted right after each page's container opens.
 static const char NAV_HTML[] PROGMEM = R"NAV(
 <style>
-  .nav{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:1.2rem; }
-  .nav a{ border-radius:.5rem; background:#2a3340; color:#e6e9ef;
-    font-size:.85rem; line-height:1; padding:.5rem .8rem; text-decoration:none; }
-  .nav a:hover{ background:#37424f; }
-  .nav a.active{ background:#ff5a3c; color:#fff; }
+  .nav{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin:3px 0; }
+  .nav a, .nav button{ border:0; cursor:pointer; font-family:inherit; border-radius:.5rem;
+    background:var(--bg); color:var(--text); font-size:.85rem; line-height:1;
+    padding:.5rem .8rem; text-decoration:none; opacity:1; transition:opacity .15s; }
+  .nav a:hover, .nav button:hover{ opacity:.6; }
+  .nav a.active{ opacity:.6; }
+  .menuwrap{ position:relative; margin-left:auto; }
+  .navmenu{ display:none; position:absolute; right:0; top:120%; background:var(--card-bg);
+    border:1px solid var(--border); border-radius:.5rem; box-shadow:0 6px 18px rgba(0,0,0,.45);
+    min-width:170px; padding:.3rem; z-index:80; }
+  .navmenu.open{ display:block; }
+  .navmenu button{ display:block; width:100%; text-align:left; border:0; background:none;
+    color:var(--text); font-size:.85rem; padding:.5rem .7rem; border-radius:.35rem; cursor:pointer; }
+  .navmenu button:hover{ opacity:.6; }
 </style>
 <div class="nav">
   <a href="/">Home</a>
   <a href="/config">Config</a>
   <a href="/api">API docs</a>
+  <div class="menuwrap">
+    <button onclick="event.stopPropagation(); document.getElementById('navmenu').classList.toggle('open');">&#9776;</button>
+    <div id="navmenu" class="navmenu" onclick="event.stopPropagation();">
+      <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/theme').then(function(){ location.reload(); });">Toggle Theme</button>
+      <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
+      <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
+    </div>
+  </div>
 </div>
-<script>(function(){var p=location.pathname,l=document.querySelectorAll('.nav a');
-  for(var i=0;i<l.length;i++){ if(l[i].getAttribute('href')===p){ l[i].className='active'; } }})();</script>
+<script>
+  (function(){var p=location.pathname,l=document.querySelectorAll('.nav a');
+    for(var i=0;i<l.length;i++){ if(l[i].getAttribute('href')===p){ l[i].className='active'; } }})();
+  document.addEventListener('click', function(){ document.getElementById('navmenu').classList.remove('open'); });
+  document.addEventListener('DOMContentLoaded', function(){
+    if(typeof ejectSD !== 'function'){ document.getElementById('menuEject').style.display='none'; }
+    if(typeof formatSD !== 'function'){ document.getElementById('menuFormat').style.display='none'; }
+  });
+</script>
 )NAV";
 
 static const char INDEX_HTML_0[] PROGMEM = R"(
 <style>
-  h1{ font-weight:600; font-size:1.7rem; letter-spacing:.5px; margin:0 0 .2rem; text-align:center; }
-  .ip{ color:#8b93a3; font-size:.8rem; text-align:center; margin:0 0 1.2rem; }
-  .card{ background:#1b212b; border:1px solid #232b37; border-radius:.9rem; padding:1.1rem; margin-bottom:1.1rem; }
-  .btn-row{ display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.6rem; }
-  .btn{ border:0; border-radius:.55rem; color:#fff; background:#2a3340; font-size:.85rem;
-    padding:.6rem 1rem; cursor:pointer; transition:background .15s; }
-  .btn:hover{ background:#37424f; }
-  .btn.accent{ background:#ff5a3c; }
-  .btn.accent:hover{ background:#ff6f55; }
-  .ghead{ margin:0 0 .8rem; font-size:.95rem; color:#cfd4de; }
-  #crumb{ background:#11151c; border-radius:.55rem; padding:.6rem .8rem; margin-bottom:.8rem;
-    font-size:.85rem; color:#9db4d0; }
-  #status{ position:fixed; left:50%; transform:translateX(-50%); bottom:1rem; z-index:50; max-width:90%;
-    padding:.65rem 1.1rem; border-radius:.6rem; font-size:.85rem; display:none;
-    box-shadow:0 6px 18px rgba(0,0,0,.45); }
-  #status.ok{ display:block; background:#16361f; color:#7ee29a; border:1px solid #2f6b41; }
-  #status.err{ display:block; background:#3a1a1d; color:#ff8b8b; border:1px solid #7a2d33; }
-  #status.info{ display:block; background:#1e2733; color:#9db4d0; border:1px solid #33485f; }
+  .ip{ color:var(--muted); font-size:.8rem; text-align:center; margin:0;
+    position:fixed; left:0; bottom:0; width:100%; z-index:50;
+    background:var(--bg); box-sizing:border-box; padding:.5rem 1rem; }
+  .card{ background:var(--card-bg); border:1px solid var(--border); border-radius:.9rem; padding:1.1rem; margin-bottom:1.1rem; }
+  .btn-row{ display:flex; flex-wrap:wrap; gap:.5rem; margin:3px 0; }
+  .btn{ position:relative; z-index:0; border:0; border-radius:.55rem; color:var(--text);
+    background:var(--card-bg); font-size:.85rem; padding:.6rem 1rem; cursor:pointer; }
+  .btn::before{ content:''; position:absolute; inset:0; z-index:-1; border-radius:inherit;
+    background:var(--btn); opacity:0; transition:opacity .15s; }
+  .btn:hover::before{ opacity:1; }
+  .ghead{ margin:0 0 .8rem; font-size:.95rem; color:var(--text); }
+  #crumb{ background:var(--bg); border-radius:.55rem; padding:.6rem .8rem; margin-bottom:.8rem;
+    font-size:.85rem; color:var(--muted); }
   table.files{ width:100%; border-collapse:collapse; font-size:.85rem; }
-  table.files th, table.files td{ text-align:left; padding:.5rem .4rem; border-bottom:1px solid #232b37; }
-  table.files th{ color:#8b93a3; font-weight:600; }
+  table.files th, table.files td{ text-align:left; padding:.5rem .4rem; border-bottom:1px solid var(--border); }
+  table.files th{ color:var(--muted); font-weight:600; }
   table.files .ficon{ display:inline-block; vertical-align:-2px; margin-right:.4rem; color:#e0b357; }
-  table.files td.sz{ color:#8b93a3; white-space:nowrap; }
+  table.files td.sz{ color:var(--muted); white-space:nowrap; }
+  table.files td.rowmenu{ width:1%; white-space:nowrap; text-align:right; }
+  .ellipsisbtn{ border:0; background:none; color:var(--muted); font-size:1rem; line-height:1;
+    padding:.3rem .5rem; cursor:pointer; opacity:1; transition:opacity .15s; }
+  .ellipsisbtn:hover{ opacity:.6; }
   table.files td.cfgfile{ color:#8a7fd1; font-style:italic; }
   table.files a.pvlink{ color:inherit; text-decoration:none; cursor:pointer; }
   table.files tr.pvrow:hover{ opacity:.7; }
-  #ctxmenu{ position:fixed; display:none; background:#1b212b; border:1px solid #232b37;
+  #ctxmenu{ position:fixed; display:none; background:var(--card-bg); border:1px solid var(--border);
     border-radius:.5rem; box-shadow:0 6px 18px rgba(0,0,0,.45); z-index:60; min-width:140px; padding:.3rem; }
-  #ctxmenu button{ display:block; width:100%; text-align:left; border:0; background:none; color:#e6e9ef;
+  #ctxmenu button{ display:block; width:100%; text-align:left; border:0; background:none; color:var(--text);
     font-size:.85rem; padding:.5rem .7rem; border-radius:.35rem; cursor:pointer; }
-  #ctxmenu button:hover{ background:#2a3340; }
-  #ctxmenu button.danger{ color:#ff5a3c; }
-  #ctxmenu button.danger:hover{ background:#ff5a3c; color:#fff; }
+  #ctxmenu button:hover{ background:var(--btn); }
+  #ctxmenu button.danger{ color:var(--accent); }
+  #ctxmenu button.danger:hover{ background:var(--accent); color:#fff; }
   #movebox{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:70; }
   #movebox .card{ max-width:360px; margin:10vh auto; }
   .mvrow{ padding:.45rem .3rem; cursor:pointer; border-radius:.35rem; font-size:.85rem; }
-  .mvrow:hover{ background:#2a3340; }
-  .layout{ display:flex; gap:1rem; align-items:flex-start; }
-  .maincol{ flex:1; min-width:0; }
-  #previewcol{ display:none; width:320px; flex:0 0 320px; position:sticky; top:1.2rem; }
+  .mvrow:hover{ background:var(--btn); }
+  .center_div{ display:flex; flex-direction:column; min-height:100vh; box-sizing:border-box; }
+  .layout{ display:flex; gap:1rem; align-items:stretch; flex:1; min-height:0; }
+  .maincol{ flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; }
+  .listcard{ display:flex; flex-direction:column; flex:1; min-height:0; }
+  .filewrap{ flex:1; min-height:0; overflow-y:auto; }
+  #previewcol{ display:none; width:320px; flex:0 0 320px; position:sticky; top:1.2rem; align-self:flex-start; }
   #previewcol img{ max-width:100%; border-radius:.5rem; display:block; }
   #previewcol:fullscreen, #previewcol:-webkit-full-screen{
     width:100vw; height:100vh; max-width:none; position:static; top:auto;
@@ -129,12 +156,18 @@ static const char SD_FAULTY_HTML[] PROGMEM = R"(
 // status so the page reloads itself as soon as it changes (inserted, ejected,
 // or turns out to be faulty).
 static const char SD_POLL_HTML[] PROGMEM = R"(
-<div id="status"></div>
 <script>
+  var __statusDefault = document.getElementById('status').textContent;
+  var __statusTimer = null;
   function showStatus(msg, kind){
     var s=document.getElementById('status');
+    if(__statusTimer){ clearTimeout(__statusTimer); }
     s.textContent=msg;
-    s.className=kind||'info';
+    __statusTimer=setTimeout(function(){
+      s.textContent=__statusDefault;
+      s.className='ip';
+      __statusTimer=null;
+    }, 3000);
   }
   function formatSD(){
     if(!confirm('This will ERASE ALL DATA on the SD card. Continue?')){ return; }
@@ -161,30 +194,28 @@ static const char SD_POLL_HTML[] PROGMEM = R"(
 static const char INDEX_HTML_1[] PROGMEM = R"(
 <div class="layout">
   <div class="maincol">
-    <div class="card">
+    <div class="card listcard">
       <div class="btn-row">
         <label class="btn accent" for="up">Upload file</label>
         <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
         <button class="btn" onclick="newFolder();">New folder</button>
-        <button class="btn" onclick="ejectSD();">Eject SD card</button>
-        <button class="btn" onclick="formatSD();">Format SD card</button>
       </div>
-    </div>
-    <div class="card">
       <div id="crumb"></div>
-      <table class="files"><tbody id="flist"></tbody></table>
+      <div class="filewrap">
+        <table class="files"><tbody id="flist"></tbody></table>
+      </div>
     </div>
   </div>
   <div id="previewcol" class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;gap:.3rem;">
-      <span id="previewName" style="font-size:.85rem;color:#cfd4de;word-break:break-all;flex:1;min-width:0;"></span>
+      <span id="previewName" style="font-size:.85rem;color:var(--text);word-break:break-all;flex:1;min-width:0;"></span>
       <button class="btn iconbtn" id="prevBtn" onclick="prevPreview();" title="Previous"></button>
       <button class="btn iconbtn" id="nextBtn" onclick="nextPreview();" title="Next"></button>
       <button class="btn iconbtn" id="fsBtn" onclick="toggleFullscreen();" title="Fullscreen"></button>
       <button class="btn iconbtn" style="padding:.35rem .6rem;" onclick="closePreview();" title="Close">&times;</button>
     </div>
     <img id="previewImg" alt="">
-    <pre id="previewText" style="display:none;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.75rem;color:#cfd4de;background:#11151c;border-radius:.5rem;padding:.6rem;margin:0;"></pre>
+    <pre id="previewText" style="display:none;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.75rem;color:var(--text);background:var(--bg);border-radius:.5rem;padding:.6rem;margin:0;"></pre>
   </div>
 </div>
 </div>
@@ -192,7 +223,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
 <div id="movebox" onclick="if(event.target===this){ closeMoveDialog(); }">
   <div class="card">
     <p id="movetitle" style="margin:0 0 .6rem;font-size:.9rem;"></p>
-    <div id="movepath" style="color:#9db4d0;font-size:.8rem;margin:0 0 .6rem;"></div>
+    <div id="movepath" style="color:var(--muted);font-size:.8rem;margin:0 0 .6rem;"></div>
     <div id="movelist" style="max-height:40vh;overflow-y:auto;margin-bottom:.8rem;"></div>
     <div class="btn-row">
       <button class="btn accent" onclick="doMove();">Move here</button>
@@ -329,10 +360,11 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
           icon.innerHTML=FOLDER_ICON_SVG;
           tdName.appendChild(icon);
           var fl=document.createElement('a');
-          fl.href='#'; fl.textContent=name;
+          fl.className='pvlink'; fl.href='#'; fl.textContent=name;
           fl.onclick=function(e){ e.preventDefault(); navTo(currentDir ? currentDir+'/'+name : name); };
           tdName.appendChild(fl);
           tdSize.textContent='Folder';
+          tr.className='pvrow';
         }else{
           if(isPreviewable(name)){
             var pv=document.createElement('a');
@@ -346,11 +378,21 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
           tdSize.textContent=fmtSize(size);
         }
         tr.oncontextmenu=function(e){ e.preventDefault(); showCtxMenu(e.clientX, e.clientY, name, isDir); };
-        tr.appendChild(tdName); tr.appendChild(tdSize);
+        var tdMenu=document.createElement('td');
+        tdMenu.className='rowmenu';
+        var mb=document.createElement('button');
+        mb.className='ellipsisbtn'; mb.textContent='...'; mb.title='Menu';
+        mb.onclick=function(e){
+          e.preventDefault(); e.stopPropagation();
+          var r=mb.getBoundingClientRect();
+          showCtxMenu(r.left, r.bottom, name, isDir);
+        };
+        tdMenu.appendChild(mb);
+        tr.appendChild(tdName); tr.appendChild(tdSize); tr.appendChild(tdMenu);
         tbody.appendChild(tr);
       });
       if(!entries.length){
-        tbody.innerHTML='<tr><td colspan="2" style="color:#8b93a3;">No files.</td></tr>';
+        tbody.innerHTML='<tr><td colspan="3" style="color:var(--muted);">No files.</td></tr>';
       }
     });
   }
@@ -499,7 +541,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         return n.length && n.charAt(n.length-1)==='/';
       }).map(function(e){ return e.split(':')[0].slice(0,-1); });
       if(!folders.length){
-        list.innerHTML='<div style="color:#8b93a3;font-size:.8rem;padding:.4rem;">No subfolders here.</div>';
+        list.innerHTML='<div style="color:var(--muted);font-size:.8rem;padding:.4rem;">No subfolders here.</div>';
         return;
       }
       folders.forEach(function(n){
@@ -561,12 +603,12 @@ static const char APLIST_HTML_0[] PROGMEM = R"(
   .c{text-align: center;}
   input{width:95%;padding:5px;font-size:1em;text-align:center;}
   body{text-align: left;}
-  button{display:block;margin:1rem auto 0;border:0;border-radius:0.55rem;color:#fff;line-height:1;font-size:1rem;padding:0.6rem 1.6rem;background-color:#ff5a3c;}
-  button:hover{background-color:#ff6f55;}
+  button{display:block;margin:1rem auto 0;border:0;border-radius:0.55rem;color:#fff;line-height:1;font-size:1rem;padding:0.6rem 1.6rem;background-color:var(--accent);}
+  button:hover{background-color:var(--accent-hover);}
   .q{float: right;width: 64px;text-align: right;}
   .radio{width:2em;}
   #vm{width:100%;height:50vh;overflow-y:auto;margin-bottom:1em;}
-  #pbar{width:100%;height:10px;background:#2a3340;border-radius:5px;overflow:hidden;margin-bottom:1em;}
+  #pbar{width:100%;height:10px;background:var(--btn);border-radius:5px;overflow:hidden;margin-bottom:1em;}
   #pfill{height:100%;width:0;background:#1fa3ec;transition:width 10s linear;}
 </style>
   <div class="contain">
@@ -651,12 +693,12 @@ static const char REDIRECT_HTML[] PROGMEM = R"(
 static const char API_HTML_0[] PROGMEM = R"(
 <style>
   h1{ font-size:1.6rem; margin:0 0 .2rem; text-align:center; }
-  h2{ font-size:1rem; color:#cfd4de; margin:1.4rem 0 .6rem; }
-  .sub{ color:#8b93a3; font-size:.8rem; text-align:center; margin:0 0 1.2rem; }
+  h2{ font-size:1rem; color:var(--text); margin:1.4rem 0 .6rem; }
+  .sub{ color:var(--muted); font-size:.8rem; text-align:center; margin:0 0 1.2rem; }
   table{ width:100%; border-collapse:collapse; font-size:.82rem; }
-  th,td{ text-align:left; padding:.5rem .6rem; border-bottom:1px solid #232b37; vertical-align:top; }
-  th{ color:#8b93a3; font-weight:600; }
-  code{ background:#1b212b; border:1px solid #232b37; border-radius:.3rem; padding:.05rem .35rem;
+  th,td{ text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th{ color:var(--muted); font-weight:600; }
+  code{ background:var(--card-bg); border:1px solid var(--border); border-radius:.3rem; padding:.05rem .35rem;
     font-size:.78rem; color:#ff9c85; white-space:nowrap; }
   .m{ color:#7ee29a; font-weight:600; }
 </style>

@@ -5,6 +5,12 @@ Firmware for a Waveshare **ESP32-C6-LCD-1.47** (ST7789, 172x320 IPS) that turns 
 microSD card into WiFi-accessible file storage, with hot-plug SD card support
 and a small on-device status display.
 
+## TODO
+
+Waiting for a device with native USB support so I can make it behave like USB flash storage, so it can be used on a TV for playing videos while the video is being uploaded. Esentially a streaming feature for a non-smart TV.
+
+![Web UI screenshot](Screenshot.png)
+
 ## Hardware
 
 - Board: ESP32-C6-LCD-1.47 (172x320 ST7789 LCD)
@@ -39,11 +45,12 @@ and a small on-device status display.
 - Upload, download, delete, move, and rename files (or folders) from the web
   UI or the HTTP API. Moving or renaming onto an already-taken name fails
   rather than silently overwriting.
-- `config.txt` holds the saved WiFi credentials and screen brightness (see
-  below) - it's a normal file, always sorted to the end of the file list and
-  shown in a distinct color so it's easy to recognize. Nothing stops it being
-  renamed/moved/deleted like any other file; doing so just means the device
-  falls back to RAM-only WiFi/brightness state until it's recreated.
+- `config.txt` holds the saved WiFi credentials, screen brightness, and UI
+  theme colors (see below) - it's a normal file, always sorted to the end of
+  the file list and shown in a distinct color so it's easy to recognize.
+  Nothing stops it being renamed/moved/deleted like any other file; doing so
+  just means the device falls back to RAM-only WiFi/brightness/theme state
+  until it's recreated.
 - **Hot-plug.** The card doesn't need to be present at boot, and can be
   inserted or removed while the device is running - the web UI updates
   itself automatically (polls status every few seconds and reloads).
@@ -89,6 +96,32 @@ and a small on-device status display.
   in `lcd_display.cpp`).
 - `/api` - HTTP API reference page (see below).
 
+### UI theme colors
+The **Toggle theme** button in the nav bar switches between the dark
+(default) and light color presets below, persisting the choice to
+`config.txt` (`THEME=dark` or `THEME=light`).
+
+The web UI's colors are stored in `config.txt` as `KEY=#rrggbb` lines below
+the WiFi/brightness lines, each preceded by a `#` comment. Edit the file on
+a PC (with the SD card removed from the device) to customize:
+
+| Key | Default | Used for |
+|---|---|---|
+| `COLOR_BG` | `#11151c` | Page background |
+| `COLOR_CARD_BG` | `#1b212b` | Card/panel background |
+| `COLOR_BORDER` | `#232b37` | Card/table borders |
+| `COLOR_TEXT` | `#e6e9ef` | Main body text |
+| `COLOR_MUTED` | `#8b93a3` | Secondary/muted text |
+| `COLOR_ACCENT` | `#ff5a3c` | Primary button / active nav background |
+| `COLOR_ACCENT_HOVER` | `#ff6f55` | Primary button hover |
+| `COLOR_LINK` | `#ff7a5c` | Hyperlink color |
+| `COLOR_BTN` | `#2a3340` | Secondary button background |
+| `COLOR_BTN_HOVER` | `#37424f` | Secondary button hover |
+
+Missing or malformed lines fall back to the defaults above. Lines are
+rewritten (in RAM values) any time WiFi credentials or brightness are saved,
+so customized colors persist across those changes.
+
 ### HTTP API
 All file/folder endpoints below take an optional `dir` query param (a
 relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
@@ -122,3 +155,4 @@ relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
 - Text preview reads only the first 8KB of a file (`PREVIEW_MAX_BYTES` in
   `config.h`); larger text files are truncated in the preview panel (download
   still gets the whole file).
+

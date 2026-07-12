@@ -16,5 +16,7 @@ extern char* WIFIC_getDeviceName(void);
 extern String WIFIC_getStationIp(void);       
 extern bool WIFIC_stationConnected(void);     
 extern String WIFIC_getApIp(void);
+extern String WIFIC_getThemeCSSVars(void);    // ":root" CSS custom properties for the UI theme colors
+extern void WIFIC_toggleTheme(void);          // flips between the dark/light color presets and persists it
 
 #endif
