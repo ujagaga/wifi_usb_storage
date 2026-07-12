@@ -34,7 +34,16 @@ Waiting for a device with native USB support so I can make it behave like USB fl
   off to save power. It comes back automatically if the station connection
   drops.
 - The on-device LCD shows the AP's SSID/password/IP at boot, then switches to
-  the station SSID/IP once connected.
+  the station SSID/IP once connected, followed by the station's WiFi signal
+  strength (RSSI, dBm), refreshed in place every 60s. The `/config` page also
+  shows live RSSI (polled every 2s) - handy for testing router placement.
+- **Upload throughput tracks WiFi signal strength closely.** At a weak
+  station signal (~-74 dBm) uploads were bottlenecked to ~450-480 KB/s
+  regardless of chunk size or upload method; moved close to the router
+  (~-24 dBm) and throughput went above 600 KB/s - at that rate a 1GB file
+  takes roughly 29 minutes (less on a stronger/less congested link). If
+  uploads feel slow, check the RSSI reading before suspecting the SD card or
+  code - a weak signal forces the radio down to a much lower PHY rate.
 
 ### SD card storage
 - **Folders.** Create folders, navigate into them (breadcrumb trail at the
@@ -134,7 +143,7 @@ relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
 | GET | `/api/filelist?dir=DIR` | List entries as `name:size` for files or `name/:0` for folders (`\|`-separated) |
 | GET | `/download?dir=DIR&name=NAME` | Download a file |
 | GET | `/preview?dir=DIR&name=NAME` | Read up to the first 8KB of a file as plain text (used by the UI's text preview) |
-| POST | `/upload?dir=DIR` | Upload a file (multipart field `f`) |
+| POST | `/upload` | Upload a file: raw body (not multipart), folder/filename via `X-Dir`/`X-Name` headers |
 | GET | `/delete?dir=DIR&name=NAME` | Delete a file, or a folder and everything inside it |
 | GET | `/mkdir?dir=DIR&name=NAME` | Create a subfolder |
 | GET | `/move?dir=DIR&name=NAME&destDir=DEST` | Move a file into another folder; fails if the name is already taken there |
@@ -142,6 +151,8 @@ relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
 | GET | `/eject` | Finish pending writes, unmount the SD card |
 | GET | `/format` | Erase the SD card and create a fresh filesystem |
 | GET | `/api/sdstatus` | `ready`, `faulty`, or `missing` |
+| GET | `/api/sdspace` | `total:free` bytes on the SD card |
+| GET | `/api/rssi` | Station WiFi signal strength (dBm) |
 | GET | `/aplist` | Last WiFi scan result |
 | GET | `/wifisave?s=SSID&p=PASS` | Save WiFi credentials, switch to station mode |
 | GET | `/brightness?value=PERCENT` | Set screen illumination (0-100; actual duty is capped at 50% in hardware) |

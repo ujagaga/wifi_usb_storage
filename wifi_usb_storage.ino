@@ -12,6 +12,11 @@ enum Operation {
 static Operation state = ShowAp;
 static String statusMessage = "";         /* This is set and requested from other modules. */
 
+#define RSSI_REFRESH_MS 60000
+static int rssiCursorX = 0, rssiCursorY = 0;
+static String lastRssiStr = "";
+static uint32_t lastRssiMs = 0;
+
 void MAIN_setStatusMsg(String msg){
   statusMessage = msg;
 }
@@ -54,6 +59,27 @@ static void display_station_info(String ip)
   LCD_color(C_WHITE);
   LCD_setFont(Font12pt);
   LCD_write(ip);
+  LCD_setFont(Font9pt);
+  LCD_color(C_YELLOW);
+  LCD_write("\n\nSignal: ");
+  LCD_color(C_WHITE);
+  rssiCursorX = LCD_getX();
+  rssiCursorY = LCD_getY();
+  lastRssiStr = String(WIFIC_getRssi()) + " dBm";
+  LCD_write(lastRssiStr);
+  lastRssiMs = millis();
+}
+
+// Overwrites just the signal-strength value in place (no full-screen redraw),
+// called periodically while the station screen is showing.
+static void refresh_station_rssi(void)
+{
+  LCD_setCursor(rssiCursorX, rssiCursorY);
+  LCD_clearStringArea(lastRssiStr);
+  LCD_setCursor(rssiCursorX, rssiCursorY);
+  LCD_color(C_WHITE);
+  lastRssiStr = String(WIFIC_getRssi()) + " dBm";
+  LCD_write(lastRssiStr);
 }
 
 void setup(void)
@@ -80,6 +106,11 @@ void loop(void){
     if(stationIp.length() > 1){
       display_station_info(stationIp);
       state = ShowStation;
+    }
+  }else if(state == ShowStation){
+    if((millis() - lastRssiMs) >= RSSI_REFRESH_MS){
+      refresh_station_rssi();
+      lastRssiMs = millis();
     }
   }
 }

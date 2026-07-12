@@ -700,7 +700,10 @@ static const char APLIST_HTML_2[] PROGMEM = R"(
         <input id='p' name='p' length=32 placeholder='Password'><br>
         <br><button type='submit'>Save</button>
       </form>
-      <div style="margin-top:2rem;">
+      <div style="margin-top:2rem;color:var(--muted);font-size:.85rem;">
+        WiFi signal: <span id="rssi">-</span> dBm
+      </div>
+      <div style="margin-top:1rem;">
         <label for="bl" style="display:block;margin-bottom:.4rem;">Screen illumination: <span id="blval"></span>%</label>
         <input type="range" id="bl" min="0" max="100" step="1" value=")";
 
@@ -738,6 +741,13 @@ static const char APLIST_HTML_3[] PROGMEM = R"(" oninput="document.getElementByI
   function setBrightness(v){
     fetch('/brightness?value=' + encodeURIComponent(v));
   }
+  function pollRssi(){
+    fetch('/api/rssi').then(function(r){ return r.text(); }).then(function(t){
+      document.getElementById('rssi').textContent = t.trim();
+    }).catch(function(){});
+  }
+  pollRssi();
+  setInterval(pollRssi, 2000);
   document.getElementById('blval').textContent = document.getElementById('bl').value;
   setTimeout(function(){ document.getElementById('pfill').style.width='100%'; }, 50); // animate bar
   setTimeout(function(){ load(3); }, 10000);   // fetch after the bar fills, then retry

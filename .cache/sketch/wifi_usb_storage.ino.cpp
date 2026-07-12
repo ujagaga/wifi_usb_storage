@@ -14,19 +14,26 @@ enum Operation {
 static Operation state = ShowAp;
 static String statusMessage = "";         /* This is set and requested from other modules. */
 
-#line 15 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#define RSSI_REFRESH_MS 60000
+static int rssiCursorX = 0, rssiCursorY = 0;
+static String lastRssiStr = "";
+static uint32_t lastRssiMs = 0;
+
+#line 20 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void MAIN_setStatusMsg(String msg);
-#line 19 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 24 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 String MAIN_getStatusMsg(void);
-#line 23 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 28 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 static void display_ap_info(void);
-#line 44 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 49 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 static void display_station_info(String ip);
-#line 59 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 75 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+static void refresh_station_rssi(void);
+#line 85 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void setup(void);
-#line 69 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 95 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void loop(void);
-#line 15 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
+#line 20 "/home/rada/Projects/wifi_usb_storage/wifi_usb_storage.ino"
 void MAIN_setStatusMsg(String msg){
   statusMessage = msg;
 }
@@ -69,6 +76,27 @@ static void display_station_info(String ip)
   LCD_color(C_WHITE);
   LCD_setFont(Font12pt);
   LCD_write(ip);
+  LCD_setFont(Font9pt);
+  LCD_color(C_YELLOW);
+  LCD_write("\n\nSignal: ");
+  LCD_color(C_WHITE);
+  rssiCursorX = LCD_getX();
+  rssiCursorY = LCD_getY();
+  lastRssiStr = String(WIFIC_getRssi()) + " dBm";
+  LCD_write(lastRssiStr);
+  lastRssiMs = millis();
+}
+
+// Overwrites just the signal-strength value in place (no full-screen redraw),
+// called periodically while the station screen is showing.
+static void refresh_station_rssi(void)
+{
+  LCD_setCursor(rssiCursorX, rssiCursorY);
+  LCD_clearStringArea(lastRssiStr);
+  LCD_setCursor(rssiCursorX, rssiCursorY);
+  LCD_color(C_WHITE);
+  lastRssiStr = String(WIFIC_getRssi()) + " dBm";
+  LCD_write(lastRssiStr);
 }
 
 void setup(void)
@@ -95,6 +123,11 @@ void loop(void){
     if(stationIp.length() > 1){
       display_station_info(stationIp);
       state = ShowStation;
+    }
+  }else if(state == ShowStation){
+    if((millis() - lastRssiMs) >= RSSI_REFRESH_MS){
+      refresh_station_rssi();
+      lastRssiMs = millis();
     }
   }
 }

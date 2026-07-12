@@ -379,3 +379,8 @@ bool WIFIC_stationConnected()
     return (WiFi.status() == WL_CONNECTED);
 }
 
+int WIFIC_getRssi(void)
+{
+    return WiFi.RSSI();
+}
+

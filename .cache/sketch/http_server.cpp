@@ -289,6 +289,10 @@ static void sdSpace(void){
   webServer->send(200, "text/plain", SDSTOR_getSpaceInfo());
 }
 
+static void wifiRssi(void){
+  webServer->send(200, "text/plain", String(WIFIC_getRssi()));
+}
+
 static void ejectSD(void){
   if(SDSTOR_eject()){
     webServer->send(200, "text/plain", "SD card safely ejected. You may remove it now.");
@@ -334,6 +338,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/aplist", HTTP_GET, apList);
   webServer->on("/api/sdstatus", HTTP_GET, sdStatus);
   webServer->on("/api/sdspace", HTTP_GET, sdSpace);
+  webServer->on("/api/rssi", HTTP_GET, wifiRssi);
   webServer->on("/eject", HTTP_GET, ejectSD);
   webServer->on("/format", HTTP_GET, formatSD);
   webServer->onNotFound(showStartPage);

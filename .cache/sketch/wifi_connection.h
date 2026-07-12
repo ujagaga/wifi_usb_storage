@@ -15,7 +15,8 @@ extern uint8_t WIFIC_getBrightness(void);
 extern void WIFIC_setBrightness(uint8_t percent);  // 0..100, persisted to WIFI_CFG_PATH
 extern char* WIFIC_getDeviceName(void);       
 extern String WIFIC_getStationIp(void);       
-extern bool WIFIC_stationConnected(void);     
+extern bool WIFIC_stationConnected(void);
+extern int WIFIC_getRssi(void);               // station WiFi signal strength, dBm
 extern String WIFIC_getApIp(void);
 extern String WIFIC_getThemeCSSVars(void);    // ":root" CSS custom properties for the UI theme colors
 extern void WIFIC_toggleTheme(void);          // flips between the dark/light color presets and persists it
