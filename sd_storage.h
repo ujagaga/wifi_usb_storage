@@ -22,6 +22,8 @@ extern bool SDSTOR_isFaulty(void);         // true if a card is present but its 
 extern bool SDSTOR_eject(void);            // finish pending writes, unmount for safe removal
 extern bool SDSTOR_format(void);           // wipe the card and lay down a fresh FAT filesystem
 extern String SDSTOR_getSpaceInfo(void);   // "total:free" bytes, or "" if no card is mounted
+extern bool SDSTOR_readTextFile(const String& path, String& outContent);   // whole-file read; path is absolute (e.g. "/config.txt")
+extern bool SDSTOR_writeTextFile(const String& path, const String& content); // overwrite/create
 extern String SDSTOR_list(String dir);     // "name:size|name:size|...", dirs reported as "name/:0"
 extern bool SDSTOR_mkdir(String dir, String name);
 extern bool SDSTOR_sendRaw(String dir, String name, WebServer* server);  // stream file to HTTP client

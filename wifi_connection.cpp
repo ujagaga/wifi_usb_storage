@@ -10,7 +10,6 @@
  */
 
 #include <WiFi.h>
-#include <SD.h>
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
@@ -113,27 +112,36 @@ void WIFIC_toggleTheme(void) {
 // brightness percent). Credentials/brightness always live in RAM; the SD file
 // is only a mirror that's written/read when a card happens to be present.
 // -----------------------------------------------------------------------------
+// Extracts the next '\n'-terminated line from content starting at pos,
+// advancing pos past it. Once exhausted, returns "" and leaves pos > length.
+static String nextLine(const String& content, int& pos){
+    if (pos > (int)content.length()) {
+        return "";
+    }
+    int nl = content.indexOf('\n', pos);
+    String line;
+    if (nl < 0) {
+        line = content.substring(pos);
+        pos = content.length() + 1;
+    } else {
+        line = content.substring(pos, nl);
+        pos = nl + 1;
+    }
+    line.replace("\r", "");
+    return line;
+}
+
 static void saveCredsToSD(void) {
     if (!SDSTOR_isReady()) {
         return;
     }
-    LCD_busRelease();
-    if (SD.exists(WIFI_CFG_PATH)) {
-        SD.remove(WIFI_CFG_PATH);
+    String content = st_ssid + "\n" + st_pass + "\n" + String(st_brightness) + "\n";
+    content += "THEME=" + st_theme + "\n";
+    content += "# --- UI theme colors (hex #rrggbb) ---\n";
+    for (int i = 0; i < NUM_COLOR_ENTRIES; i++) {
+        content += String(st_colorEntries[i].key) + "=" + *st_colorEntries[i].value + "\n";
     }
-    File f = SD.open(WIFI_CFG_PATH, FILE_WRITE);
-    if (f) {
-        f.println(st_ssid);
-        f.println(st_pass);
-        f.println(st_brightness);
-        f.println("THEME=" + st_theme);
-        f.println("# --- UI theme colors (hex #rrggbb) ---");
-        for (int i = 0; i < NUM_COLOR_ENTRIES; i++) {
-            f.println(String(st_colorEntries[i].key) + "=" + *st_colorEntries[i].value);
-        }
-        f.close();
-    }
-    LCD_busAcquire();
+    SDSTOR_writeTextFile(WIFI_CFG_PATH, content);
 }
 
 // Loads RAM creds/brightness from the SD file if one exists; otherwise
@@ -143,15 +151,15 @@ static bool loadOrCreateCredsFromSD(void) {
     if (!SDSTOR_isReady()) {
         return false;
     }
-    LCD_busRelease();
-    File f = SD.open(WIFI_CFG_PATH);
-    bool exists = (bool)f;
+    String content;
+    bool exists = SDSTOR_readTextFile(WIFI_CFG_PATH, content);
     if (exists) {
-        st_ssid = f.readStringUntil('\n');
+        int pos = 0;
+        st_ssid = nextLine(content, pos);
         st_ssid.trim();
-        st_pass = f.readStringUntil('\n');
+        st_pass = nextLine(content, pos);
         st_pass.trim();
-        String br = f.readStringUntil('\n');
+        String br = nextLine(content, pos);
         br.trim();
         if (br.length() > 0) {
             int v = br.toInt();
@@ -159,8 +167,8 @@ static bool loadOrCreateCredsFromSD(void) {
                 st_brightness = (uint8_t)v;
             }
         }
-        while (f.available()) {
-            String line = f.readStringUntil('\n');
+        while (pos <= (int)content.length()) {
+            String line = nextLine(content, pos);
             line.trim();
             if (line.length() == 0 || line[0] == '#') {
                 continue;
@@ -189,9 +197,7 @@ static bool loadOrCreateCredsFromSD(void) {
                 }
             }
         }
-        f.close();
     }
-    LCD_busAcquire();
 
     if (!exists) {
         saveCredsToSD();

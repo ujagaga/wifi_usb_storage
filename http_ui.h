@@ -594,6 +594,10 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   function stopUpload(){
     uploadStopped = true;
     if(currentUploadXhr){ currentUploadXhr.abort(); }
+    // A background fetch to refresh the list can race the device still
+    // noticing/cleaning up the aborted upload; a full reload just waits
+    // naturally for the server instead of silently failing.
+    location.reload();
   }
   function uploadOne(file, label, row, batch){
     return new Promise(function(resolve){
