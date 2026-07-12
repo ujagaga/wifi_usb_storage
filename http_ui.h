@@ -210,7 +210,7 @@ static const char SD_POLL_HTML[] PROGMEM = R"(
   fetch('/api/updatecheck').then(function(r){ return r.text(); }).then(function(v){
     v = v.trim();
     if(!v){ return; }
-    __statusDefault += '  ·  Update v' + v + ' available';
+    __statusDefault += ' | Update v' + v + ' available';
     if(!__statusTimer){ document.getElementById('status').textContent = __statusDefault; }
   }).catch(function(){});
   function showStatus(msg, kind){
