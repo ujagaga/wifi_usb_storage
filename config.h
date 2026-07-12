@@ -1,6 +1,13 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define VERSION "1.0.0"
+
+// Where the device checks for a newer firmware version: a plain text file
+// holding just the version string, fetched over HTTPS. Checked once the
+// station connects, then every UPDATE_CHECK_INTERVAL_MS thereafter.
+#define UPDATE_VERSION_URL      "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/main/build/version.txt"
+#define UPDATE_CHECK_INTERVAL_MS (24UL * 60 * 60 * 1000UL)
 // Target board: Waveshare ESP32-C6-LCD-1.47 (ST7789, 172x320 IPS).
 // Uncomment to use the Adafruit driver instead of the bundled custom one.
 // The custom driver (ST7789_Custom.h) handles the 172x320 offsets and the

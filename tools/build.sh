@@ -9,16 +9,18 @@
 #   FQBN=esp32:esp32:esp32c6   target board
 #   PORT=/dev/ttyACM0          serial port for upload
 #
-# Uses the "Huge APP" partition scheme (3MB app, no OTA): the firmware is large
-# and we flash over serial, so OTA/SPIFFS partitions are not needed. In the
-# Arduino IDE, set Tools -> Partition Scheme -> "Huge APP (3MB No OTA/1MB SPIFFS)"
-# to match. Switching schemes between builds requires a full reflash.
+# Uses the "No FS (2MB APP x2)" partition scheme: two OTA app slots (app0/app1),
+# no filesystem partition (storage is the SD card, not SPIFFS/FFat). This is
+# what makes firmware updates possible - Update.h flips between app0/app1, so
+# a bad/interrupted update still leaves the other slot bootable. In the
+# Arduino IDE, set Tools -> Partition Scheme -> "No FS 4MB (2MB APP x2)" to match.
+# Switching schemes between builds requires a full reflash.
 set -euo pipefail
 
 SKETCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$SKETCH_DIR/build"
 CACHE_DIR="$SKETCH_DIR/.cache"
-FQBN="${FQBN:-esp32:esp32:esp32c6:PartitionScheme=huge_app}"
+FQBN="${FQBN:-esp32:esp32:esp32c6:PartitionScheme=no_fs}"
 PORT="${PORT:-/dev/ttyACM0}"
 
 command -v arduino-cli >/dev/null 2>&1 || {

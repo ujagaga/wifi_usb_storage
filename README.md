@@ -16,7 +16,8 @@ Waiting for a device with native USB support so I can make it behave like USB fl
 - Storage: microSD (TF) card over SPI, sharing the bus with the LCD (separate
   chip-selects; see `config.h` for pin assignments)
 - Build: Arduino core via `arduino-cli` (`tools/build.sh` / `tools/build.sh upload`),
-  "Huge APP" partition scheme
+  "No FS 4MB (2MB APP x2)" partition scheme - two OTA app slots, no SPIFFS/FFat
+  (storage is the SD card)
 
 ## Features
 

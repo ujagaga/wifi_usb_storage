@@ -11,6 +11,7 @@
 #include "wifi_usb_storage.h"
 #include "sd_storage.h"
 #include "http_ui.h"
+#include "update_check.h"
 
 // --- Web server object ---
 WebServer* webServer = nullptr;
@@ -288,6 +289,10 @@ static void sdSpace(void){
   webServer->send(200, "text/plain", SDSTOR_getSpaceInfo());
 }
 
+static void updateCheckInfo(void){
+  webServer->send(200, "text/plain", UPDATE_CHECK_isAvailable() ? UPDATE_CHECK_getLatestVersion() : "");
+}
+
 static void wifiRssi(void){
   webServer->send(200, "text/plain", String(WIFIC_getRssi()));
 }
@@ -337,6 +342,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/aplist", HTTP_GET, apList);
   webServer->on("/api/sdstatus", HTTP_GET, sdStatus);
   webServer->on("/api/sdspace", HTTP_GET, sdSpace);
+  webServer->on("/api/updatecheck", HTTP_GET, updateCheckInfo);
   webServer->on("/api/rssi", HTTP_GET, wifiRssi);
   webServer->on("/eject", HTTP_GET, ejectSD);
   webServer->on("/format", HTTP_GET, formatSD);

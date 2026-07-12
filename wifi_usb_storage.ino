@@ -3,6 +3,7 @@
 #include "http_server.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
+#include "update_check.h"
 
 enum Operation {
   ShowAp,
@@ -89,6 +90,7 @@ void setup(void)
   SDSTOR_init();
   WIFIC_init();
   HTTP_SERVER_init();
+  UPDATE_CHECK_init();
   display_ap_info();
 }
 
@@ -96,6 +98,7 @@ void loop(void){
   HTTP_SERVER_process();
   LCD_process();
   WIFIC_process();
+  UPDATE_CHECK_process();
 
   // The AP screen stays up (SSID/pass/IP) until the station interface actually
   // connects, then it's replaced by the station SSID/IP. Without saved
