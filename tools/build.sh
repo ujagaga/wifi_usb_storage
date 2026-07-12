@@ -31,6 +31,14 @@ command -v arduino-cli >/dev/null 2>&1 || {
 echo "Compiling $SKETCH_DIR for $FQBN ..."
 arduino-cli compile --fqbn "$FQBN" --output-dir "$BUILD_DIR" --build-path "$CACHE_DIR" "$SKETCH_DIR"
 
+# Keep build/version.txt and the firmware's .md5 in sync with this build,
+# so update_check.cpp's version/MD5 checks always match what's actually
+# committed - no manual bookkeeping required.
+VERSION=$(grep -oP '(?<=#define VERSION ")[^"]+' "$SKETCH_DIR/config.h")
+echo "$VERSION" > "$BUILD_DIR/version.txt"
+md5sum "$BUILD_DIR/wifi_usb_storage.ino.bin" | awk '{print $1}' > "$BUILD_DIR/wifi_usb_storage.ino.bin.md5"
+echo "Updated build/version.txt ($VERSION) and build/wifi_usb_storage.ino.bin.md5"
+
 if [ "${1:-}" = "upload" ]; then
   echo "Uploading to $PORT ..."
   arduino-cli upload --fqbn "$FQBN" -p "$PORT" --input-dir "$BUILD_DIR" "$SKETCH_DIR"
