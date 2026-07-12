@@ -7,6 +7,7 @@ extern void UPDATE_CHECK_init(void);
 extern void UPDATE_CHECK_process(void);
 extern bool UPDATE_CHECK_isAvailable(void);        // true once a differing remote version has been seen
 extern String UPDATE_CHECK_getLatestVersion(void); // the version string last fetched, "" if never checked
+extern void UPDATE_CHECK_forceCheck(void);          // check now, bypassing UPDATE_CHECK_INTERVAL_MS
 
 // Downloads the new firmware image to the SD card (UPDATE_FIRMWARE_FILENAME
 // at root), staged for a later flash step. Does not touch flash/OTA at all.

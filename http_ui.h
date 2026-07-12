@@ -56,6 +56,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
       <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/theme').then(function(){ location.reload(); });">Toggle Theme</button>
       <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
       <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
+      <button id="menuCheckUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); checkUpdateNow();">Check for Update</button>
       <button id="menuDownloadUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); downloadUpdate();">Download Update</button>
       <button id="menuApplyUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); applyUpdate();">Apply Update (Reboot)</button>
     </div>
@@ -65,15 +66,25 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
   (function(){var p=location.pathname,l=document.querySelectorAll('.nav a');
     for(var i=0;i<l.length;i++){ if(l[i].getAttribute('href')===p){ l[i].className='active'; } }})();
   document.addEventListener('click', function(){ document.getElementById('navmenu').classList.remove('open'); });
+  function showUpdateButtons(available){
+    document.getElementById('menuDownloadUpdate').style.display = available ? 'block' : 'none';
+    document.getElementById('menuApplyUpdate').style.display = available ? 'block' : 'none';
+  }
+  function checkUpdateNow(){
+    showStatus('Checking for update...', 'info');
+    fetch('/checkupdatenow').then(function(r){ return r.text(); }).then(function(v){
+      v = v.trim();
+      showUpdateButtons(!!v);
+      showStatus(v ? ('Update v' + v + ' available.') : 'No update available.', 'info');
+    }).catch(function(e){ showStatus('Check error: ' + e.message, 'err'); });
+  }
   document.addEventListener('DOMContentLoaded', function(){
     if(typeof ejectSD !== 'function'){ document.getElementById('menuEject').style.display='none'; }
     if(typeof formatSD !== 'function'){ document.getElementById('menuFormat').style.display='none'; }
     if(typeof showStatus === 'function'){
+      document.getElementById('menuCheckUpdate').style.display='block';
       fetch('/api/updatecheck').then(function(r){ return r.text(); }).then(function(v){
-        if(v.trim()){
-          document.getElementById('menuDownloadUpdate').style.display='block';
-          document.getElementById('menuApplyUpdate').style.display='block';
-        }
+        showUpdateButtons(!!v.trim());
       }).catch(function(){});
     }
   });

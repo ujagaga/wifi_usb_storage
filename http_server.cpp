@@ -293,6 +293,11 @@ static void updateCheckInfo(void){
   webServer->send(200, "text/plain", UPDATE_CHECK_isAvailable() ? UPDATE_CHECK_getLatestVersion() : "");
 }
 
+static void checkUpdateNow(void){
+  UPDATE_CHECK_forceCheck();
+  webServer->send(200, "text/plain", UPDATE_CHECK_isAvailable() ? UPDATE_CHECK_getLatestVersion() : "");
+}
+
 static void downloadUpdate(void){
   if(UPDATE_CHECK_downloadToSD()){
     webServer->send(200, "text/plain", "Firmware downloaded to SD card.");
@@ -361,6 +366,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/api/sdstatus", HTTP_GET, sdStatus);
   webServer->on("/api/sdspace", HTTP_GET, sdSpace);
   webServer->on("/api/updatecheck", HTTP_GET, updateCheckInfo);
+  webServer->on("/checkupdatenow", HTTP_GET, checkUpdateNow);
   webServer->on("/downloadupdate", HTTP_GET, downloadUpdate);
   webServer->on("/applyupdate", HTTP_GET, applyUpdate);
   webServer->on("/api/rssi", HTTP_GET, wifiRssi);

@@ -13,6 +13,7 @@
 
 static bool everChecked = false;
 static uint32_t lastCheckMs = 0;
+static uint32_t connectedSinceMs = 0;  // 0 = not connected (or not seen yet this connection)
 static bool updateAvailable = false;
 static String latestVersion = "";
 static String latestMd5 = "";
@@ -67,11 +68,21 @@ void UPDATE_CHECK_init(void){
 
 void UPDATE_CHECK_process(void){
   if(!WIFIC_stationConnected()){
+    connectedSinceMs = 0;   // reconnecting later waits the full delay again
     return;
   }
   uint32_t now = millis();
-  if(!everChecked || (now - lastCheckMs) >= UPDATE_CHECK_INTERVAL_MS){
+  if(connectedSinceMs == 0){
+    connectedSinceMs = now;
+  }
+  if(!everChecked){
+    if((now - connectedSinceMs) < UPDATE_FIRST_CHECK_DELAY_MS){
+      return;
+    }
     everChecked = true;
+    lastCheckMs = now;
+    doCheck();
+  }else if((now - lastCheckMs) >= UPDATE_CHECK_INTERVAL_MS){
     lastCheckMs = now;
     doCheck();
   }
@@ -83,6 +94,12 @@ bool UPDATE_CHECK_isAvailable(void){
 
 String UPDATE_CHECK_getLatestVersion(void){
   return latestVersion;
+}
+
+void UPDATE_CHECK_forceCheck(void){
+  lastCheckMs = millis();
+  everChecked = true;
+  doCheck();
 }
 
 // Streams the new firmware image straight to SD, named
