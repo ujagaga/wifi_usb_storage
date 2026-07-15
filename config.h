@@ -8,9 +8,9 @@
 // UPDATE_FIRST_CHECK_DELAY_MS after the station connects (not immediately -
 // gives WiFi/DNS time to settle), then every UPDATE_CHECK_INTERVAL_MS
 // thereafter. The "Check for Update" menu button bypasses both delays.
-#define UPDATE_VERSION_URL      "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/main/build/version.txt"
-#define UPDATE_FIRMWARE_URL     "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/main/build/wifi_usb_storage.ino.bin"
-#define UPDATE_MD5_URL          "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/main/build/wifi_usb_storage.ino.bin.md5"
+#define UPDATE_VERSION_URL      "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/esp32c6-wifi-no-usb/build/version.txt"
+#define UPDATE_FIRMWARE_URL     "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/esp32c6-wifi-no-usb/build/wifi_usb_storage.ino.bin"
+#define UPDATE_MD5_URL          "https://raw.githubusercontent.com/ujagaga/wifi_usb_storage/refs/heads/esp32c6-wifi-no-usb/build/wifi_usb_storage.ino.bin.md5"
 #define UPDATE_FIRST_CHECK_DELAY_MS (2UL * 60 * 1000UL)
 #define UPDATE_CHECK_INTERVAL_MS (24UL * 60 * 60 * 1000UL)
 #define UPDATE_FIRMWARE_FILENAME "firmware_update.bin"  // fallback name if the remote version is unknown; normally "firmware_update_<version>.bin"
