@@ -486,14 +486,16 @@ static uint64_t uploadTotalBytes; // bytes written overall, across all parts
 static int uploadPartIndex;       // 0 = still writing the plain (unsplit) file; >=1 once split
 static String uploadErr;
 static uint32_t uploadBytesSinceFlush;  // see USB_MSC_FLUSH_BYTES in config.h
+static uint64_t uploadExpectedBytes;    // 0 if the client didn't declare a total (Content-Length)
+static uint32_t uploadBytesSinceProgress;  // see PROGRESS_UPDATE_BYTES in config.h
 
 String SDSTOR_lastError(void){
   return uploadErr;
 }
 
-// The SD bus is held (LCD released) for the whole upload: begin->chunks->end.
-// Re-acquiring the LCD bus between chunks re-latches SPI on the C6 and silently
-// corrupts the in-progress SD write.
+// The SD bus is normally left released (LCD side idle) between writeBegin and
+// writeEnd, only briefly re-acquired at the PROGRESS_UPDATE_BYTES checkpoints
+// in SDSTOR_writeChunk to draw the progress bar, then released again.
 bool SDSTOR_writeBegin(String dir, String name, uint64_t expectedTotalBytes){
   uploadErr = "";
   if(!cardReady){
@@ -521,6 +523,8 @@ bool SDSTOR_writeBegin(String dir, String name, uint64_t expectedTotalBytes){
   uploadTotalBytes = 0;
   uploadPartIndex = 0;
   uploadBytesSinceFlush = 0;
+  uploadExpectedBytes = expectedTotalBytes;
+  uploadBytesSinceProgress = 0;
 
   String path = dirPrefix + "/" + baseName;
   LCD_busRelease();
@@ -628,6 +632,16 @@ bool SDSTOR_writeChunk(const uint8_t* buf, size_t len){
         uploadFile.flush();
         uploadBytesSinceFlush = 0;
       }
+      // Only drawn at this checkpoint, not per chunk - see PROGRESS_UPDATE_BYTES.
+      if(uploadExpectedBytes > 0){
+        uploadBytesSinceProgress += wrote;
+        if(uploadBytesSinceProgress >= PROGRESS_UPDATE_BYTES){
+          uploadBytesSinceProgress = 0;
+          LCD_busAcquire();
+          LCD_showProgress((uint8_t)((uploadTotalBytes * 100) / uploadExpectedBytes));
+          LCD_busRelease();
+        }
+      }
     }
     if(uploadPartBytes >= SD_PART_MAX_BYTES && offset < len){
       if(!rollToNextPart()){
@@ -657,6 +671,7 @@ bool SDSTOR_writeEnd(void){
   }
 
   LCD_busAcquire();
+  LCD_hideProgress();
   return true;
 }
 
@@ -807,6 +822,7 @@ void SDSTOR_writeAbort(void){
     uploadFile.close();
     removeLogicalFile(uploadDirPrefix, uploadBaseName);
     LCD_busAcquire();
+    LCD_hideProgress();
   }
 }
 

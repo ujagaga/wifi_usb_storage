@@ -68,6 +68,19 @@
 // sees the growing size promptly instead of only once the upload finishes.
 #define USB_MSC_FLUSH_BYTES ((uint32_t)(1024UL * 1024UL))
 
+// How often (in bytes written) the WiFi-upload progress bar is refreshed.
+// Bigger than a single chunk on purpose: keeps the LCD bus re-acquire/release
+// pair (see SDSTOR_writeChunk in sd_storage.cpp) infrequent.
+#define PROGRESS_UPDATE_BYTES ((uint32_t)(64UL * 1024UL))
+
+// USB MSC writes are raw sectors with no notion of a file's total size, so
+// the progress bar during a USB copy is a rough activity indicator, not an
+// accurate percentage: it fills as if every burst of writes were this many
+// bytes, and is considered "done" (bar removed) after this many ms without
+// another sector write.
+#define MSC_PROGRESS_ASSUMED_BYTES ((uint32_t)(8UL * 1024UL * 1024UL))
+#define MSC_PROGRESS_IDLE_MS 400
+
 // FAT32 caps a single file at 4GiB-1. Logical files bigger than this are
 // transparently split into hidden numbered part files plus a manifest (see
 // sd_storage.cpp); this cap is kept comfortably below the hard limit.

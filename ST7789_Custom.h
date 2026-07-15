@@ -99,10 +99,10 @@ class ST7789_Custom : public Adafruit_GFX {
     void busRelease() { digitalWrite(TFT_CS, HIGH); }
     void busAcquire() {
       digitalWrite(TFT_CS, LOW);
-      // On the ESP32-C6, setFrequency()/setDataMode() do not sync to hardware,
-      // but the SD library's transactions do (cmd.update). A begin/endTransaction
-      // pair forces the config to actually latch again. The panel effectively
-      // runs in MODE0 (the driver's MODE3 setter never latched), so restore MODE0.
+      // setFrequency()/setDataMode() do not sync to hardware, but the SD
+      // library's transactions do (cmd.update). A begin/endTransaction pair
+      // forces the config to actually latch again. The panel effectively runs
+      // in MODE0 (the driver's MODE3 setter never latched), so restore MODE0.
       SPI.beginTransaction(SPISettings(24000000, MSBFIRST, SPI_MODE0));
       SPI.endTransaction();
       digitalWrite(TFT_DC, HIGH);

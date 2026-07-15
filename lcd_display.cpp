@@ -27,6 +27,11 @@ static uint8_t currentRotation = 0;
 static uint32_t currentDuty = TFT_BL_DUTY;
 static uint32_t lastBacklightChange = 0;
 
+#define PROGRESS_BAR_HEIGHT 4
+#define PROGRESS_COLOR C_GREEN
+static bool progressActive = false;
+static int progressFilledW = 0;
+
 static uint16_t invertColor(uint16_t color) {
   return ~color;
 }
@@ -181,6 +186,28 @@ void LCD_rotate180(void){
   tft.fillScreen(bgColor);
 }
 
+// Bit 1 of the rotation value is set iff we're flipped from the boot default
+// (1/landscape for the custom driver, 0/portrait for Adafruit's), regardless
+// of which base rotation this board boots into.
+bool LCD_isRotated180(void){
+  return (currentRotation & 2) != 0;
+}
+
+void LCD_appendConfigLines(String& content){
+  content += "LCD_ROTATED180=" + String(LCD_isRotated180() ? "1" : "0") + "\n";
+}
+
+bool LCD_tryParseConfigLine(const String& key, const String& val){
+  if(key != "LCD_ROTATED180"){
+    return false;
+  }
+  bool wantRotated = (val == "1");
+  if(wantRotated != LCD_isRotated180()){
+    LCD_rotate180();
+  }
+  return true;
+}
+
 // --- Shared SPI bus + raw image blit ---
 // The microSD card shares the LCD's SPI bus. These wrappers let sd_images.cpp
 // release the bus for SD reads and push raw RGB565 pixels to the panel. The
@@ -236,6 +263,36 @@ void LCD_setInverted(bool inverted){
     bgColor = invertColor(bgColor);
     fgColor = invertColor(fgColor);
   }
+}
+
+// Thin bar at the screen bottom, filling left-to-right as percent grows.
+// Only the newly-filled slice is drawn each call, so repeated calls with a
+// slowly-growing percent stay cheap.
+void LCD_showProgress(uint8_t percent){
+  if(percent > 100){
+    percent = 100;
+  }
+  int barY = tft.height() - PROGRESS_BAR_HEIGHT;
+  int fillW = ((int)tft.width() * percent) / 100;
+  if(!progressActive){
+    tft.fillRect(0, barY, tft.width(), PROGRESS_BAR_HEIGHT, bgColor);
+    progressFilledW = 0;
+    progressActive = true;
+  }
+  if(fillW > progressFilledW){
+    tft.fillRect(progressFilledW, barY, fillW - progressFilledW, PROGRESS_BAR_HEIGHT, PROGRESS_COLOR);
+    progressFilledW = fillW;
+  }
+}
+
+void LCD_hideProgress(void){
+  if(!progressActive){
+    return;
+  }
+  int barY = tft.height() - PROGRESS_BAR_HEIGHT;
+  tft.fillRect(0, barY, tft.width(), PROGRESS_BAR_HEIGHT, bgColor);
+  progressActive = false;
+  progressFilledW = 0;
 }
 
 void LCD_process() {

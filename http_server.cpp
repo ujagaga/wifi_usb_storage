@@ -118,6 +118,7 @@ static void toggleTheme(void){
 
 static void rotateScreen180(void){
   LCD_rotate180();
+  WIFIC_persistConfig();
   webServer->send(200, "text/plain", "OK");
 }
 

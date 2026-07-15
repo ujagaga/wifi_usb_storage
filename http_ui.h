@@ -55,7 +55,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
     <div id="navmenu" class="navmenu" onclick="event.stopPropagation();">
       <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/theme').then(function(){ location.reload(); });">Toggle Theme</button>
       <button onclick="document.getElementById('navmenu').classList.remove('open'); if(confirm('Switch the write master? The current side becomes read-only.')){ fetch('/writemaster').then(function(){ location.reload(); }); }">Toggle Write Master</button>
-      <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/rotate180');">Rotate Screen 180°</button>
+      <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/rotate180');">Rotate Screen 180</button>
       <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
       <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
       <button id="menuCheckUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); checkUpdateNow();">Check for Update</button>
@@ -252,9 +252,9 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   <div class="maincol">
     <div class="card listcard">
       <div class="btn-row">
-        <label class="btn accent" for="up">Upload file</label>
+        <label class="btn accent" id="uploadBtn" for="up">Upload file</label>
         <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
-        <button class="btn" onclick="newFolder();">New folder</button>
+        <button class="btn" id="newFolderBtn" onclick="newFolder();">New folder</button>
         <span id="writemaster" style="margin-left:auto;align-self:center;color:var(--muted);font-size:.8rem;white-space:nowrap;"></span>
         <span id="sdspace" style="align-self:center;color:var(--muted);font-size:.8rem;white-space:nowrap;"></span>
       </div>
@@ -327,11 +327,16 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       el.textContent = fmtSize(free) + ' free of ' + fmtSize(total);
     }).catch(function(){});
   }
+  var canWrite = true;
   function refreshWriteMaster(){
     fetch('/api/writemaster').then(function(r){ return r.text(); }).then(function(t){
+      t=t.trim();
+      canWrite = (t !== 'USB');
+      var upBtn=document.getElementById('uploadBtn'), nfBtn=document.getElementById('newFolderBtn');
+      if(upBtn){ upBtn.style.display = canWrite ? '' : 'none'; }
+      if(nfBtn){ nfBtn.style.display = canWrite ? '' : 'none'; }
       var el=document.getElementById('writemaster');
       if(!el){ return; }
-      t=t.trim();
       el.textContent = t ? ('Write master: ' + t) : '';
     }).catch(function(){});
   }
@@ -572,19 +577,23 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         pv.onclick=function(){ hideCtxMenu(); showPreview(name); };
         menu.appendChild(pv);
       }
-      var mv=document.createElement('button');
-      mv.textContent='Move';
-      mv.onclick=function(){ hideCtxMenu(); showMoveDialog(name); };
-      menu.appendChild(mv);
+      if(canWrite){
+        var mv=document.createElement('button');
+        mv.textContent='Move';
+        mv.onclick=function(){ hideCtxMenu(); showMoveDialog(name); };
+        menu.appendChild(mv);
+      }
     }
-    var rn=document.createElement('button');
-    rn.textContent='Rename';
-    rn.onclick=function(){ hideCtxMenu(); renamePrompt(name); };
-    menu.appendChild(rn);
-    var del=document.createElement('button');
-    del.className='danger'; del.textContent='Delete';
-    del.onclick=function(){ hideCtxMenu(); deleteFile(name); };
-    menu.appendChild(del);
+    if(canWrite){
+      var rn=document.createElement('button');
+      rn.textContent='Rename';
+      rn.onclick=function(){ hideCtxMenu(); renamePrompt(name); };
+      menu.appendChild(rn);
+      var del=document.createElement('button');
+      del.className='danger'; del.textContent='Delete';
+      del.onclick=function(){ hideCtxMenu(); deleteFile(name); };
+      menu.appendChild(del);
+    }
     menu.style.left=x+'px';
     menu.style.top=y+'px';
     menu.style.display='block';

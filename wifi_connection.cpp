@@ -92,6 +92,7 @@ static void saveCredsToSD(void) {
     String content = st_ssid + "\n" + st_pass + "\n" + String(st_brightness) + "\n";
     THEME_appendConfigLines(content);
     STORAGE_MODE_appendConfigLines(content);
+    LCD_appendConfigLines(content);
     SDSTOR_writeTextFile(WIFI_CFG_PATH, content);
 }
 
@@ -133,7 +134,9 @@ static bool loadOrCreateCredsFromSD(void) {
             key.trim();
             val.trim();
             if(!THEME_tryParseConfigLine(key, val)){
-                STORAGE_MODE_tryParseConfigLine(key, val);
+                if(!STORAGE_MODE_tryParseConfigLine(key, val)){
+                    LCD_tryParseConfigLine(key, val);
+                }
             }
         }
     }

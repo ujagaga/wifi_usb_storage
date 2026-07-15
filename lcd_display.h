@@ -36,6 +36,11 @@ extern uint16_t LCD_getFgColor(void);
 extern void LCD_setFgColor(uint16_t color);
 extern void LCD_setInverted(bool inverted);
 extern void LCD_rotate180(void);
+extern bool LCD_isRotated180(void);
+// Persistence hook into wifi_connection.cpp's shared WIFI_CFG_PATH content,
+// same pattern as theme.h/storage_mode.h.
+extern void LCD_appendConfigLines(String& content);
+extern bool LCD_tryParseConfigLine(const String& key, const String& val);
 extern void LCD_setBacklight(uint8_t percent);
 extern void LCD_flashBacklight(void);
 extern void LCD_busRelease(void);
@@ -44,5 +49,7 @@ extern void LCD_imageBegin(void);
 extern void LCD_imagePush(const uint16_t *buf, uint32_t n);
 extern void LCD_imageEnd(void);
 extern void LCD_process(void);
+extern void LCD_showProgress(uint8_t percent);  // draw/update a thin bar at the screen bottom
+extern void LCD_hideProgress(void);             // erase it (overwrite with background)
 
 #endif
