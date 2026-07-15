@@ -26,9 +26,9 @@ class ST7789_Custom : public Adafruit_GFX {
       ledcAttach(TFT_BL, TFT_BL_FREQ, TFT_BL_RES_BITS);
       ledcWrite(TFT_BL, TFT_BL_DUTY);
 
-      // ESP32-C6: route hardware SPI to the board pins. MISO is attached so the
-      // microSD card (which shares this bus) can read; the LCD itself never reads.
-      SPI.begin(TFT_SCLK, SD_MISO, TFT_MOSI, TFT_CS);
+      // Route hardware SPI to the board pins. The LCD itself never reads, so
+      // MISO is left unconnected.
+      SPI.begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
       SPI.setFrequency(24000000);
       SPI.setDataMode(SPI_MODE3);
 

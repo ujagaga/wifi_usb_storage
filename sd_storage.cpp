@@ -1,13 +1,20 @@
-#include <SD.h>
-#include <SPI.h>
 #include <WebServer.h>
-#include <sd_diskio.h>   // raw card init (sdcard_init/sdcard_uninit), bypasses the filesystem
-#include <diskio.h>      // disk_initialize() - talks SD protocol directly (DSTATUS/STA_NOINIT)
-#include <ff.h>          // f_mkfs() - force a fresh FAT filesystem, used by SDSTOR_format()
 #include <Update.h>      // flashes a staged firmware image, used by SDSTOR_applyFirmwareUpdate()
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
+
+#include <SD_MMC.h>
+#include <driver/sdmmc_host.h>              // sdmmc_host_init/init_slot/deinit - raw present-probe below
+#include <driver/sdmmc_default_configs.h>  // SDMMC_HOST_DEFAULT/SDMMC_SLOT_CONFIG_DEFAULT, same raw probe purpose
+#include <sdmmc_cmd.h>                      // sdmmc_card_init() - same raw probe purpose
+// The rest of this file talks to the card through generic fs::FS calls
+// (open/exists/rename/...), which fs::SDMMCFS implements the same shape as
+// any other Arduino filesystem - aliased to "SD" purely so those call sites
+// read the same as any other SD.h-based sketch. Only the mount/probe/format
+// logic below references SD_MMC-specific methods (readRAW/writeRAW/
+// numSectors/sectorSize) directly, without going through this alias.
+#define SD SD_MMC
 
 static bool cardReady = false;
 static bool cardFaulty = false;  // hardware present, but no readable filesystem
@@ -15,18 +22,35 @@ static bool ejected = false;     // true after SDSTOR_eject(), until the card is
 static uint32_t lastRetryMs = 0;
 #define SD_RETRY_INTERVAL_MS 2000
 
-// Talks raw SD protocol on a throwaway drive slot (GO_IDLE_STATE etc.) and
-// tears it straight back down. This is what tells "no card" apart from "card
-// present but its filesystem is unreadable" - SD.begin() alone can't, since
-// it fails the same way for both (no card, and no/bad filesystem).
+// Talks raw SD_MMC protocol (CMD0/CMD8/ACMD41 etc.) on a throwaway slot init
+// and tears it straight back down, bypassing SD_MMC.begin()'s filesystem
+// mount entirely. This is what tells "no card" apart from "card present but
+// its filesystem is unreadable" - SD_MMC.begin() alone can't, since it fails
+// the same way for both.
 static bool sdCardPresentProbe(void){
-  uint8_t pdrv = sdcard_init(SD_CS, &SPI, SD_SPI_FREQ);
-  if(pdrv == 0xFF){
+  sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+  host.flags = SDMMC_HOST_FLAG_4BIT;  // match the board's wiring (D0-D3), same as SD_MMC.begin()
+  sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
+  slot.clk = (gpio_num_t)SD_CLK;
+  slot.cmd = (gpio_num_t)SD_CMD;
+  slot.d0  = (gpio_num_t)SD_D0;
+  slot.d1  = (gpio_num_t)SD_D1;
+  slot.d2  = (gpio_num_t)SD_D2;
+  slot.d3  = (gpio_num_t)SD_D3;
+  slot.width = 4;
+
+  if(sdmmc_host_init() != ESP_OK){
     return false;
   }
-  DSTATUS status = disk_initialize(pdrv);
-  sdcard_uninit(pdrv);
-  return (status & STA_NOINIT) == 0;
+  if(sdmmc_host_init_slot(host.slot, &slot) != ESP_OK){
+    sdmmc_host_deinit();
+    return false;
+  }
+  sdmmc_card_t card;
+  bool present = (sdmmc_card_init(&host, &card) == ESP_OK);
+  sdmmc_host_deinit_slot(host.slot);
+  sdmmc_host_deinit();
+  return present;
 }
 
 // Probe for hardware presence, then (only if present) try to mount the
@@ -35,7 +59,8 @@ static void attemptMount(void){
   LCD_busRelease();
   SD.end();
   bool present = sdCardPresentProbe();
-  bool mounted = present && SD.begin(SD_CS, SPI, SD_SPI_FREQ);
+  SD.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
+  bool mounted = present && SD.begin(SD_MOUNT_POINT, false, false);
   if(present && !mounted){
     SD.end();
   }
@@ -459,6 +484,7 @@ static uint64_t uploadPartBytes;  // bytes written to the currently open plain/p
 static uint64_t uploadTotalBytes; // bytes written overall, across all parts
 static int uploadPartIndex;       // 0 = still writing the plain (unsplit) file; >=1 once split
 static String uploadErr;
+static uint32_t uploadBytesSinceFlush;  // see USB_MSC_FLUSH_BYTES in config.h
 
 String SDSTOR_lastError(void){
   return uploadErr;
@@ -489,6 +515,7 @@ bool SDSTOR_writeBegin(String dir, String name){
   uploadPartBytes = 0;
   uploadTotalBytes = 0;
   uploadPartIndex = 0;
+  uploadBytesSinceFlush = 0;
 
   String path = dirPrefix + "/" + baseName;
   LCD_busRelease();
@@ -573,6 +600,15 @@ bool SDSTOR_writeChunk(const uint8_t* buf, size_t len){
       uploadPartBytes += wrote;
       uploadTotalBytes += wrote;
       offset += wrote;
+      // Flush periodically (not on every chunk - that would tank upload
+      // throughput) so a USB host reading raw sectors concurrently (see
+      // usb_msc.cpp) sees the growing file size promptly instead of only
+      // once the whole upload finishes.
+      uploadBytesSinceFlush += wrote;
+      if(uploadBytesSinceFlush >= USB_MSC_FLUSH_BYTES){
+        uploadFile.flush();
+        uploadBytesSinceFlush = 0;
+      }
     }
     if(uploadPartBytes >= SD_PART_MAX_BYTES && offset < len){
       if(!rollToNextPart()){
@@ -774,33 +810,29 @@ bool SDSTOR_eject(void){
   return true;
 }
 
-// Force a fresh FAT filesystem onto the card, wiping all data - this is what
-// actually fixes a "faulty" (unreadable filesystem) card. sdcard_mount()'s
-// own format_if_empty only kicks in when there's no filesystem at all, so a
-// direct f_mkfs() is used here to reformat regardless of current contents.
+// Force a fresh FAT filesystem onto the card, wiping all data. SD_MMC's
+// public API only auto-formats when a mount attempt actually fails
+// (begin(..., format_if_mount_failed=true)), which does nothing for a card
+// that's already mounting fine - so first the boot sector is zeroed via a
+// raw sector write (while still mounted, since writeRAW needs that), which
+// guarantees the next mount fails and triggers a real reformat.
 bool SDSTOR_format(void){
   if(uploadFile){
     uploadFile.close();
   }
   LCD_busRelease();
+
+  if(cardReady){
+    uint8_t zero[512] = {0};
+    SD_MMC.writeRAW(zero, 0);
+  }
   SD.end();
 
-  bool ok = false;
+  bool mounted = false;
   if(sdCardPresentProbe()){
-    uint8_t pdrv = sdcard_init(SD_CS, &SPI, SD_SPI_FREQ);
-    if(pdrv != 0xFF){
-      char drv[3] = {(char)('0' + pdrv), ':', 0};
-      BYTE *work = (BYTE*)malloc(FF_MAX_SS);
-      if(work){
-        MKFS_PARM opt = {(BYTE)FM_ANY, 0, 0, 0, 0};
-        ok = (f_mkfs(drv, &opt, work, FF_MAX_SS) == FR_OK);
-        free(work);
-      }
-      sdcard_uninit(pdrv);
-    }
+    SD.setPins(SD_CLK, SD_CMD, SD_D0, SD_D1, SD_D2, SD_D3);
+    mounted = SD.begin(SD_MOUNT_POINT, false, true);  // format_if_mount_failed
   }
-
-  bool mounted = ok && SD.begin(SD_CS, SPI, SD_SPI_FREQ);
   LCD_busAcquire();
 
   cardReady = mounted;

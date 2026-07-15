@@ -5,6 +5,7 @@
 #include "lcd_display.h"
 #include "sd_storage.h"
 #include "update_check.h"
+#include "usb_msc.h"
 
 enum Operation {
   ShowAp,
@@ -92,6 +93,7 @@ void setup(void)
   WIFIC_init();
   HTTP_SERVER_init();
   UPDATE_CHECK_init();
+  USB_MSC_init();
   // Reached without crashing/hanging: this boot is good. Cancels any pending
   // rollback so the bootloader keeps booting this partition. If setup() had
   // instead crashed (e.g. a bad flashed image), this line never runs and the
@@ -105,6 +107,7 @@ void loop(void){
   LCD_process();
   WIFIC_process();
   UPDATE_CHECK_process();
+  USB_MSC_process();
 
   // The AP screen stays up (SSID/pass/IP) until the station interface actually
   // connects, then it's replaced by the station SSID/IP. Without saved

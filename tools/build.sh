@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
 #
-# Build (and optionally flash) the ESP32-C6 clock firmware.
+# Build (and optionally flash) the ESP32-S3 firmware.
 #
 #   tools/build.sh            compile only
 #   tools/build.sh upload     compile, then flash
 #
 # Overrides via env:
-#   FQBN=esp32:esp32:esp32c6   target board
+#   FQBN=esp32:esp32:esp32s3   target board
 #   PORT=/dev/ttyACM0          serial port for upload
 #
 # Uses the "No FS (2MB APP x2)" partition scheme: two OTA app slots (app0/app1),
 # no filesystem partition (storage is the SD card, not SPIFFS/FFat). This is
 # what makes firmware updates possible - Update.h flips between app0/app1, so
-# a bad/interrupted update still leaves the other slot bootable. In the
-# Arduino IDE, set Tools -> Partition Scheme -> "No FS 4MB (2MB APP x2)" to match.
+# a bad/interrupted update still leaves the other slot bootable. USBMode is
+# forced to "USB-OTG (TinyUSB)" (required for the USBMSC mass-storage class)
+# and FlashSize to 16MB, matching this board. In the Arduino IDE, set
+# Tools -> Partition Scheme -> "No FS 4MB (2MB APP x2)", Tools -> USB Mode ->
+# "USB-OTG (TinyUSB)", and Tools -> Flash Size -> "16MB" to match.
 # Switching schemes between builds requires a full reflash.
 set -euo pipefail
 
 SKETCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$SKETCH_DIR/build"
 CACHE_DIR="$SKETCH_DIR/.cache"
-FQBN="${FQBN:-esp32:esp32:esp32c6:PartitionScheme=no_fs}"
+FQBN="${FQBN:-esp32:esp32:esp32s3:PartitionScheme=no_fs,USBMode=default,FlashSize=16M}"
 PORT="${PORT:-/dev/ttyACM0}"
 
 command -v arduino-cli >/dev/null 2>&1 || {

@@ -10,6 +10,7 @@
  */
 
 #include <WiFi.h>
+#include <esp_mac.h>
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
@@ -17,7 +18,7 @@
 // -----------------------------------------------------------------------------
 // Local variables
 // -----------------------------------------------------------------------------
-static char myApName[24] = {0};         // AP name
+static char myApName[26] = {0};         // AP name: AP_NAME_PREFIX + 12 hex chars + terminator
 static String st_ssid = "";             // Saved SSID
 static String st_pass = "";             // Saved password
 static uint8_t st_brightness = 80;      // Saved screen illumination percent (matches the old fixed boot default)
@@ -234,9 +235,16 @@ static void APMode(void) {
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
 
-    String mac = WiFi.macAddress();
-    mac.replace(":", "");
-    String apName = String(AP_NAME_PREFIX) + mac;
+    // WiFi.macAddress() can read back all-zero on the S3 if called this
+    // early (before the STA netif is fully up); the factory-programmed base
+    // MAC from eFuse is available immediately regardless of WiFi driver
+    // state, so read it directly instead.
+    uint8_t rawMac[6];
+    esp_efuse_mac_get_default(rawMac);
+    char macHex[13];
+    snprintf(macHex, sizeof(macHex), "%02X%02X%02X%02X%02X%02X",
+             rawMac[0], rawMac[1], rawMac[2], rawMac[3], rawMac[4], rawMac[5]);
+    String apName = String(AP_NAME_PREFIX) + macHex;
     apName.toCharArray(myApName, sizeof(myApName));
 
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));

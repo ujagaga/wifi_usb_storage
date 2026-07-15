@@ -1,23 +1,21 @@
 # WiFi USB Storage
 
-Firmware for a Waveshare **ESP32-C6-LCD-1.47** (ST7789, 172x320 IPS) that turns a
-microSD card into WiFi-accessible file storage, with hot-plug SD card support
-and a small on-device status display.
-
-## TODO
-
-Waiting for a device with native USB support so I can make it behave like USB flash storage, so it can be used on a TV for playing videos while the video is being uploaded. Esentially a streaming feature for a non-smart TV.
+Firmware for a Waveshare **ESP32-S3-LCD-1.47** (ST7789, 172x320 IPS) that turns a
+microSD card into WiFi-accessible file storage, with hot-plug SD card support,
+a small on-device status display, and the card also exposed read-only over
+native USB (see USB mass storage below).
 
 ![Web UI screenshot](Screen.png)
 
 ## Hardware
 
-- Board: ESP32-C6-LCD-1.47 (172x320 ST7789 LCD)
-- Storage: microSD (TF) card over SPI, sharing the bus with the LCD (separate
-  chip-selects; see `config.h` for pin assignments)
+- Board: ESP32-S3-LCD-1.47 (172x320 ST7789 LCD), 16MB flash
+- Storage: microSD (TF) card over SD_MMC (4-bit), a separate peripheral from
+  the LCD's SPI bus (see `config.h` for pin assignments)
 - Build: Arduino core via `arduino-cli` (`tools/build.sh` / `tools/build.sh upload`),
   "No FS 4MB (2MB APP x2)" partition scheme - two OTA app slots, no SPIFFS/FFat
-  (storage is the SD card)
+  (storage is the SD card), USB Mode "USB-OTG (TinyUSB)" (required for USB
+  mass storage below)
 
 ## Features
 
@@ -79,6 +77,20 @@ Waiting for a device with native USB support so I can make it behave like USB fl
   transparently split into hidden numbered part files plus a small manifest.
   This is invisible from the UI/API - uploads, downloads, listing, and
   deletion all work on the one logical file name and its true combined size.
+
+### USB mass storage
+- The SD card is also exposed as a **read-only** USB drive whenever a host
+  (e.g. a TV) is plugged in, at the same time it's served over WiFi - e.g. a
+  video can be played on a TV over USB while it's still being uploaded over
+  WiFi. Read-only means the host can never write to the card, so this is
+  safe to run concurrently with WiFi uploads without any handoff/exclusion
+  between the two.
+- While a file is uploading over WiFi, it's flushed to the card periodically
+  (`USB_MSC_FLUSH_BYTES` in `config.h`, default 1MB) so its growing size
+  becomes visible to a USB host promptly rather than only once the upload
+  finishes. Some media players only check a file's size when you open it, so
+  a file that didn't exist yet when the USB drive was first browsed may need
+  the folder re-opened before it shows up.
 
 ### Web UI
 - `/` - main page: station IP, folder-aware file list (breadcrumb trail,
@@ -170,4 +182,10 @@ relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
 - Text preview reads only the first 8KB of a file (`PREVIEW_MAX_BYTES` in
   `config.h`); larger text files are truncated in the preview panel (download
   still gets the whole file).
+- USB mass storage reads raw sectors directly while the WiFi side may be
+  mid-write through the normal FAT driver. This relies on the ESP-IDF SDMMC
+  host driver serializing bus transactions between the two call paths -
+  believed correct but not verified against ESP-IDF source in this repo, so
+  treat "copy a large file over WiFi while browsing/playing it from USB at
+  the same time" as the acceptance test for this feature on real hardware.
 
