@@ -6,6 +6,7 @@
 #include <SD_MMC.h>
 #include <string.h>
 #include "sd_storage.h"
+#include "storage_mode.h"
 
 static USBMSC msc;
 static bool mscMediaPresent = false;
@@ -32,11 +33,30 @@ static int32_t mscOnRead(uint32_t lba, uint32_t offset, void *buffer, uint32_t b
   return done;
 }
 
-// Never expected to run - isWritable(false) below makes TinyUSB reject
-// writes before this is called - but registered defensively rather than
-// left null.
+// Only reachable when USB is the write master (see storage_mode.h) - TinyUSB
+// rejects writes itself otherwise, based on the isWritable() flag below.
+// writeRAW only writes a whole 512-byte sector at once, so a partial-sector
+// write is a read-modify-write of that one sector.
 static int32_t mscOnWrite(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32_t bufsize){
-  return bufsize;
+  uint8_t sector[512];
+  uint32_t done = 0;
+  while(done < bufsize){
+    uint32_t sectorIdx = lba + (offset + done) / 512;
+    uint32_t sectorOff = (offset + done) % 512;
+    uint32_t take = 512 - sectorOff;
+    if(take > bufsize - done){
+      take = bufsize - done;
+    }
+    if(take < 512 && !SD_MMC.readRAW(sector, sectorIdx)){
+      break;
+    }
+    memcpy(sector + sectorOff, buffer + done, take);
+    if(!SD_MMC.writeRAW(sector, sectorIdx)){
+      break;
+    }
+    done += take;
+  }
+  return done;
 }
 
 static bool mscOnStartStop(uint8_t power_condition, bool start, bool load_eject){
@@ -47,12 +67,16 @@ void USB_MSC_init(void){
   msc.vendorID("WifiUSB");
   msc.productID("SD Card");
   msc.productRevision("1.0");
-  msc.isWritable(false);
+  msc.isWritable(!STORAGE_MODE_isWifiWriteMaster());
   msc.onRead(mscOnRead);
   msc.onWrite(mscOnWrite);
   msc.onStartStop(mscOnStartStop);
   msc.mediaPresent(false);
   USB.begin();
+}
+
+void USB_MSC_setWritable(bool writable){
+  msc.isWritable(writable);
 }
 
 void USB_MSC_process(void){

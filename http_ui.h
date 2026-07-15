@@ -54,6 +54,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
     <button onclick="event.stopPropagation(); document.getElementById('navmenu').classList.toggle('open');">&#9776;</button>
     <div id="navmenu" class="navmenu" onclick="event.stopPropagation();">
       <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/theme').then(function(){ location.reload(); });">Toggle Theme</button>
+      <button onclick="document.getElementById('navmenu').classList.remove('open'); if(confirm('Switch the write master? The current side becomes read-only.')){ fetch('/writemaster').then(function(){ location.reload(); }); }">Toggle Write Master</button>
       <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
       <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
       <button id="menuCheckUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); checkUpdateNow();">Check for Update</button>
@@ -253,7 +254,8 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
         <label class="btn accent" for="up">Upload file</label>
         <input type="file" id="up" multiple style="display:none" onchange="uploadFiles(this.files);">
         <button class="btn" onclick="newFolder();">New folder</button>
-        <span id="sdspace" style="margin-left:auto;align-self:center;color:var(--muted);font-size:.8rem;white-space:nowrap;"></span>
+        <span id="writemaster" style="margin-left:auto;align-self:center;color:var(--muted);font-size:.8rem;white-space:nowrap;"></span>
+        <span id="sdspace" style="align-self:center;color:var(--muted);font-size:.8rem;white-space:nowrap;"></span>
       </div>
       <div id="crumb"></div>
       <div class="filewrap">
@@ -322,6 +324,14 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
       var parts=t.split(':');
       var total=parseInt(parts[0],10), free=parseInt(parts[1],10);
       el.textContent = fmtSize(free) + ' free of ' + fmtSize(total);
+    }).catch(function(){});
+  }
+  function refreshWriteMaster(){
+    fetch('/api/writemaster').then(function(r){ return r.text(); }).then(function(t){
+      var el=document.getElementById('writemaster');
+      if(!el){ return; }
+      t=t.trim();
+      el.textContent = t ? ('Write master: ' + t) : '';
     }).catch(function(){});
   }
   function navTo(dir){
@@ -744,6 +754,7 @@ static const char INDEX_HTML_1[] PROGMEM = R"(
   }
   loadFiles();
   refreshSpace();
+  refreshWriteMaster();
 </script>
 )";
 

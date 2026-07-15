@@ -3,6 +3,7 @@
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
+#include "storage_mode.h"
 
 #include <SD_MMC.h>
 #include <driver/sdmmc_host.h>              // sdmmc_host_init/init_slot/deinit - raw present-probe below
@@ -328,7 +329,7 @@ String SDSTOR_list(String dir){
 
 // Creates a subfolder "name" inside "dir".
 bool SDSTOR_mkdir(String dir, String name){
-  if(!cardReady){
+  if(!cardReady || !STORAGE_MODE_isWifiWriteMaster()){
     return false;
   }
   String dirPrefix;
@@ -499,6 +500,10 @@ bool SDSTOR_writeBegin(String dir, String name, uint64_t expectedTotalBytes){
     uploadErr = "SD card not ready";
     return false;
   }
+  if(!STORAGE_MODE_isWifiWriteMaster()){
+    uploadErr = "USB is currently the write master; WiFi is read-only";
+    return false;
+  }
   String dirPrefix;
   if(!sanitizeDir(dir, dirPrefix)){
     uploadErr = "Invalid folder: '" + dir + "'";
@@ -658,7 +663,7 @@ bool SDSTOR_writeEnd(void){
 // Deletes a file or a folder named "name" inside "dir". A folder is removed
 // recursively, along with everything inside it.
 bool SDSTOR_delete(String dir, String name){
-  if(!cardReady){
+  if(!cardReady || !STORAGE_MODE_isWifiWriteMaster()){
     return false;
   }
   String dirPrefix;
@@ -687,7 +692,7 @@ bool SDSTOR_delete(String dir, String name){
 // this never overwrites, unlike upload. SD.rename() is metadata-only on
 // FAT, so this doesn't copy file data even for a multi-part split file.
 bool SDSTOR_move(String srcDir, String name, String destDir){
-  if(!cardReady){
+  if(!cardReady || !STORAGE_MODE_isWifiWriteMaster()){
     return false;
   }
   String srcPrefix, destPrefix;
@@ -745,7 +750,7 @@ bool SDSTOR_move(String srcDir, String name, String destDir){
 // it, so they're unaffected. A file rename renames the manifest and every
 // numbered part too, same as SDSTOR_move().
 bool SDSTOR_rename(String dir, String oldName, String newName){
-  if(!cardReady){
+  if(!cardReady || !STORAGE_MODE_isWifiWriteMaster()){
     return false;
   }
   String dirPrefix;
@@ -831,6 +836,9 @@ bool SDSTOR_eject(void){
 // raw sector write (while still mounted, since writeRAW needs that), which
 // guarantees the next mount fails and triggers a real reformat.
 bool SDSTOR_format(void){
+  if(!STORAGE_MODE_isWifiWriteMaster()){
+    return false;
+  }
   if(uploadFile){
     uploadFile.close();
   }

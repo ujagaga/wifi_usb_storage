@@ -79,12 +79,29 @@ native USB (see USB mass storage below).
   deletion all work on the one logical file name and its true combined size.
 
 ### USB mass storage
-- The SD card is also exposed as a **read-only** USB drive whenever a host
-  (e.g. a TV) is plugged in, at the same time it's served over WiFi - e.g. a
-  video can be played on a TV over USB while it's still being uploaded over
-  WiFi. Read-only means the host can never write to the card, so this is
-  safe to run concurrently with WiFi uploads without any handoff/exclusion
-  between the two.
+- The SD card is also exposed as a USB drive whenever a host (e.g. a TV or a
+  PC) is plugged in, at the same time it's served over WiFi - e.g. a video
+  can be played on a TV over USB while it's still being uploaded over WiFi.
+- **Write master**: exactly one side - WiFi or USB - can write at any time;
+  the other is always read-only (still able to read/list/download/play, just
+  not modify anything). Defaults to WiFi as write master (USB read-only) if
+  no setting has been saved yet. Switch it from the web UI's &#9776; menu
+  ("Toggle Write Master") or `GET /writemaster`; current state via
+  `GET /api/writemaster`. Persisted to `config.txt` (`WRITE_MASTER=WIFI` or
+  `WRITE_MASTER=USB`), so it survives a reboot.
+  - When WiFi isn't the write master, upload/delete/rename/move/mkdir/format
+    all fail (including the firmware auto-updater's download-to-SD step -
+    switch back to WiFi as write master first if you need to update).
+  - When USB is the write master, it's genuinely writable, not just readable
+    - a PC can create/modify/delete files on the card directly. WiFi-side
+    reads (browsing/downloading) keep working, but this is real concurrent
+    access to the same medium through two independent paths (the ESP's own
+    FatFS mount for WiFi reads, raw sector read/write for USB) with no
+    coordination between them beyond the write-side exclusion above. A WiFi
+    read that lands while USB is mid-write to the same file/directory could
+    see a stale or half-updated view - switching write master back to WiFi
+    before relying on the WiFi-side listing being fully current is the safe
+    move, same as you'd unmount/resync any drive shared between two hosts.
 - While a file is uploading over WiFi, it's flushed to the card periodically
   (`USB_MSC_FLUSH_BYTES` in `config.h`, default 1MB) so its growing size
   becomes visible to a USB host promptly rather than only once the upload
@@ -189,6 +206,8 @@ relative folder path, e.g. `Photos/2024`; omit or leave empty for root).
 | GET | `/aplist` | Last WiFi scan result |
 | GET | `/wifisave?s=SSID&p=PASS` | Save WiFi credentials, switch to station mode |
 | GET | `/brightness?value=PERCENT` | Set screen illumination (0-100; actual duty is capped at 50% in hardware) |
+| GET | `/writemaster` | Toggle the SD card write master between WiFi and USB; returns the new state (`WiFi` or `USB`) |
+| GET | `/api/writemaster` | Current write master (`WiFi` or `USB`), without changing it |
 
 ## Known limitations
 - File/folder names: up to 255 characters (FAT's long-filename cap),

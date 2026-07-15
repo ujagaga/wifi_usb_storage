@@ -12,6 +12,8 @@
 #include "sd_storage.h"
 #include "http_ui.h"
 #include "update_check.h"
+#include "theme.h"
+#include "storage_mode.h"
 
 // --- Web server object ---
 WebServer* webServer = nullptr;
@@ -40,7 +42,7 @@ static bool requireSD(void){
 // as CSS custom properties, so every page picks up config.txt's overrides.
 static String pageStart(void) {
   String s = FPSTR(HTML_BEGIN);
-  s += "<style>:root{" + WIFIC_getThemeCSSVars() + "}</style>";
+  s += "<style>:root{" + THEME_getCSSVars() + "}</style>";
   return s;
 }
 
@@ -108,8 +110,19 @@ static void setBrightness(void){
 }
 
 static void toggleTheme(void){
-  WIFIC_toggleTheme();
+  THEME_toggle();
+  WIFIC_persistConfig();
   webServer->send(200, "text/plain", "OK");
+}
+
+static void writeMasterStatus(void){
+  webServer->send(200, "text/plain", STORAGE_MODE_isWifiWriteMaster() ? "WiFi" : "USB");
+}
+
+static void toggleWriteMaster(void){
+  STORAGE_MODE_setWifiWriteMaster(!STORAGE_MODE_isWifiWriteMaster());
+  WIFIC_persistConfig();
+  webServer->send(200, "text/plain", STORAGE_MODE_isWifiWriteMaster() ? "WiFi" : "USB");
 }
 
 static void saveWiFi(void){
@@ -363,6 +376,8 @@ void HTTP_SERVER_init(void){
   webServer->on("/wifisave", HTTP_GET, saveWiFi);
   webServer->on("/brightness", HTTP_GET, setBrightness);
   webServer->on("/theme", HTTP_GET, toggleTheme);
+  webServer->on("/writemaster", HTTP_GET, toggleWriteMaster);
+  webServer->on("/api/writemaster", HTTP_GET, writeMasterStatus);
   webServer->on("/api/filelist", HTTP_GET, fileList);
   webServer->on("/download", HTTP_GET, downloadFile);
   webServer->on("/preview", HTTP_GET, previewFile);
