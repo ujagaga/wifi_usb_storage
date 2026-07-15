@@ -201,5 +201,9 @@ bool UPDATE_CHECK_applyFromSD(void){
     return false;
   }
   String path = "/" + stagedFilename;
-  return SDSTOR_applyFirmwareUpdate(path, latestMd5, lastErr);
+  bool ok = SDSTOR_applyFirmwareUpdate(path, latestMd5, lastErr);
+  if(ok){
+    SDSTOR_delete("", stagedFilename);
+  }
+  return ok;
 }

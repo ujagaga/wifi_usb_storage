@@ -55,6 +55,7 @@ static const char NAV_HTML[] PROGMEM = R"NAV(
     <div id="navmenu" class="navmenu" onclick="event.stopPropagation();">
       <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/theme').then(function(){ location.reload(); });">Toggle Theme</button>
       <button onclick="document.getElementById('navmenu').classList.remove('open'); if(confirm('Switch the write master? The current side becomes read-only.')){ fetch('/writemaster').then(function(){ location.reload(); }); }">Toggle Write Master</button>
+      <button onclick="document.getElementById('navmenu').classList.remove('open'); fetch('/rotate180');">Rotate Screen 180°</button>
       <button id="menuEject" onclick="document.getElementById('navmenu').classList.remove('open'); ejectSD();">Eject SD Card</button>
       <button id="menuFormat" onclick="document.getElementById('navmenu').classList.remove('open'); formatSD();">Format SD Card</button>
       <button id="menuCheckUpdate" style="display:none;" onclick="document.getElementById('navmenu').classList.remove('open'); checkUpdateNow();">Check for Update</button>

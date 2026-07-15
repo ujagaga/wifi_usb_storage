@@ -14,6 +14,7 @@
 #include "update_check.h"
 #include "theme.h"
 #include "storage_mode.h"
+#include "lcd_display.h"
 
 // --- Web server object ---
 WebServer* webServer = nullptr;
@@ -112,6 +113,11 @@ static void setBrightness(void){
 static void toggleTheme(void){
   THEME_toggle();
   WIFIC_persistConfig();
+  webServer->send(200, "text/plain", "OK");
+}
+
+static void rotateScreen180(void){
+  LCD_rotate180();
   webServer->send(200, "text/plain", "OK");
 }
 
@@ -376,6 +382,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/wifisave", HTTP_GET, saveWiFi);
   webServer->on("/brightness", HTTP_GET, setBrightness);
   webServer->on("/theme", HTTP_GET, toggleTheme);
+  webServer->on("/rotate180", HTTP_GET, rotateScreen180);
   webServer->on("/writemaster", HTTP_GET, toggleWriteMaster);
   webServer->on("/api/writemaster", HTTP_GET, writeMasterStatus);
   webServer->on("/api/filelist", HTTP_GET, fileList);
