@@ -37,7 +37,16 @@ extern bool SDSTOR_move(String srcDir, String name, String destDir);  // fails i
 extern bool SDSTOR_rename(String dir, String oldName, String newName);  // fails if newName is already taken
 
 // Incremental write of an uploaded file to SD (call in START/WRITE/END order).
-extern bool SDSTOR_writeBegin(String dir, String name);
+// expectedTotalBytes, if non-zero and no bigger than SD_PART_MAX_BYTES, pre-
+// extends the file to that size immediately (a single seek-to-end-and-write
+// trick - FAT has no sparse files, so this forces the whole cluster chain to
+// be allocated up front) so a USB host browsing the card sees the true final
+// size right away instead of only the bytes written so far. Pass 0 if the
+// total size isn't known ahead of time; the file then just grows normally.
+// Note: the not-yet-uploaded tail reads back as whatever was previously on
+// those sectors (stale old data), not zeros - there's no pause/wait for a USB
+// host reading ahead of the upload, just an early, correct file size.
+extern bool SDSTOR_writeBegin(String dir, String name, uint64_t expectedTotalBytes);
 extern bool SDSTOR_writeChunk(const uint8_t* buf, size_t len);
 extern bool SDSTOR_writeEnd(void);
 extern void SDSTOR_writeAbort(void);

@@ -91,6 +91,26 @@ native USB (see USB mass storage below).
   finishes. Some media players only check a file's size when you open it, so
   a file that didn't exist yet when the USB drive was first browsed may need
   the folder re-opened before it shows up.
+- **The file's final size is reported immediately, not just its
+  uploaded-so-far size**, if the browser declares the upload's total size
+  (a normal `Content-Length` header, which it does for a regular file
+  upload). The file is pre-extended to that size the moment the upload
+  starts, via a seek-to-end-and-write trick (FAT has no sparse files, so this
+  forces the whole cluster chain to be allocated up front) - so a USB host
+  sees the true final size right away instead of a size that keeps changing
+  as the upload progresses.
+  - This does **not** make a USB host wait for data that hasn't arrived yet.
+    The not-yet-uploaded tail of the file reads back as whatever was
+    previously on those sectors (stale leftover data, not zeros) until the
+    real upload catches up and overwrites it. A player that reads roughly in
+    playback order, with upload throughput keeping ahead of playback
+    bitrate, should mostly see real data by the time it gets there; reading
+    ahead of the upload (e.g. seeking forward, or a slow WiFi link) will
+    read stale data instead of pausing - expect a glitch there, not a crash.
+    A genuine pause-until-available mechanism would need knowing which
+    physical sectors belong to the file, which isn't reliably obtainable
+    through the SD_MMC library here (would need raw FatFS access the
+    Arduino SD_MMC/VFS layer doesn't expose).
 
 ### Web UI
 - `/` - main page: station IP, folder-aware file list (breadcrumb trail,

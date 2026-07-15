@@ -493,7 +493,7 @@ String SDSTOR_lastError(void){
 // The SD bus is held (LCD released) for the whole upload: begin->chunks->end.
 // Re-acquiring the LCD bus between chunks re-latches SPI on the C6 and silently
 // corrupts the in-progress SD write.
-bool SDSTOR_writeBegin(String dir, String name){
+bool SDSTOR_writeBegin(String dir, String name, uint64_t expectedTotalBytes){
   uploadErr = "";
   if(!cardReady){
     uploadErr = "SD card not ready";
@@ -526,6 +526,20 @@ bool SDSTOR_writeBegin(String dir, String name){
     uploadErr = "Cannot open " + path + " for write";
     return false;
   }
+
+  // Pre-extend to the known final size so a USB host sees the true size
+  // right away (see SDSTOR_writeBegin's header comment). Only for files that
+  // won't need splitting - the split-part scheme doesn't know the final
+  // layout ahead of time, so those just fall back to growing normally.
+  // FAT has no sparse files, so writing one byte at the far end forces the
+  // whole preceding cluster chain to be allocated immediately.
+  if(expectedTotalBytes > 0 && expectedTotalBytes <= SD_PART_MAX_BYTES){
+    uploadFile.seek((uint32_t)(expectedTotalBytes - 1));
+    uint8_t zero = 0;
+    uploadFile.write(&zero, 1);
+    uploadFile.seek(0);
+  }
+
   return true;
 }
 

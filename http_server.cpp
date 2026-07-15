@@ -242,7 +242,16 @@ static void uploadFile_handler(void){
   if(raw.status == RAW_START){
     String dir = WebServer::urlDecode(webServer->header("X-Dir"));
     String name = WebServer::urlDecode(webServer->header("X-Name"));
-    uploadOk = SDSTOR_writeBegin(dir, name);
+    // If the browser declared the upload's total size, the file is
+    // pre-extended to that size immediately (see SDSTOR_writeBegin) so a
+    // USB host browsing the card sees the true final size right away
+    // instead of only the bytes written so far.
+    uint64_t expectedTotalBytes = 0;
+    String contentLength = webServer->header("Content-Length");
+    if(contentLength.length() > 0){
+      expectedTotalBytes = strtoull(contentLength.c_str(), nullptr, 10);
+    }
+    uploadOk = SDSTOR_writeBegin(dir, name, expectedTotalBytes);
   }else if(raw.status == RAW_WRITE){
     if(uploadOk){
       uploadOk = SDSTOR_writeChunk(raw.buf, raw.currentSize);
@@ -374,8 +383,8 @@ void HTTP_SERVER_init(void){
   webServer->on("/format", HTTP_GET, formatSD);
   webServer->onNotFound(showStartPage);
 
-  static const char* uploadHeaderKeys[] = {"X-Dir", "X-Name"};
-  webServer->collectHeaders(uploadHeaderKeys, 2);
+  static const char* uploadHeaderKeys[] = {"X-Dir", "X-Name", "Content-Length"};
+  webServer->collectHeaders(uploadHeaderKeys, 3);
 
   webServer->begin();
 }

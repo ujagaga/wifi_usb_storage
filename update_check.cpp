@@ -143,7 +143,7 @@ bool UPDATE_CHECK_downloadToSD(void){
   stagedFilename = latestVersion.length() > 0
     ? ("firmware_update_" + latestVersion + ".bin")
     : String(UPDATE_FIRMWARE_FILENAME);
-  if(!SDSTOR_writeBegin("", stagedFilename)){
+  if(!SDSTOR_writeBegin("", stagedFilename, total > 0 ? (uint64_t)total : 0)){
     lastErr = "Cannot stage firmware file: " + SDSTOR_lastError();
     https.end();
     return false;
