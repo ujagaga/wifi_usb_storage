@@ -19,6 +19,25 @@ Waiting for a device with native USB support so I can make it behave like USB fl
   "No FS 4MB (2MB APP x2)" partition scheme - two OTA app slots, no SPIFFS/FFat
   (storage is the SD card)
 
+## Flashing a new device
+
+`build/wifi_usb_storage.ino.merged.bin` is a full-flash image (bootloader +
+partitions + app) committed to the repo, rebuilt by `tools/build.sh` on every
+build. Flash it to a blank ESP32-C6 with:
+
+```
+esptool.py --chip esp32c6 --port /dev/ttyACM0 write_flash 0x0 build/wifi_usb_storage.ino.merged.bin
+```
+
+or, via Arduino IDE: Tools -> Erase All Flash Before Sketch Upload -> "Enabled",
+then use *Sketch -> Upload Using Programmer* pointed at this file (or open
+`wifi_usb_storage.ino`, set Partition Scheme to "No FS 4MB (2MB APP x2)", and
+build/upload normally).
+
+Note: `build/wifi_usb_storage.ino.bin` + `.bin.md5` are a separate pair used
+for over-the-air updates (see `update_check.h`), not for flashing a blank
+device - they don't include the bootloader/partition table.
+
 ## Features
 
 ### WiFi
