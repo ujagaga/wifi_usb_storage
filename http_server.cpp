@@ -5,6 +5,11 @@
  *  HTTP server which generates the web browser pages.
  */
 
+// Bigger than WebServer's 1436-byte default (one TCP segment) so raw-mode
+// uploads (see uploadFile_handler below) do far fewer read/dispatch/yield
+// round-trips per byte. Must match the #define in sd_storage.cpp, the other
+// file that includes WebServer.h.
+#define HTTP_RAW_BUFLEN 8192
 #include <WebServer.h>
 #include "wifi_connection.h"
 #include "config.h"

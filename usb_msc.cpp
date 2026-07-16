@@ -7,17 +7,9 @@
 #include <string.h>
 #include "sd_storage.h"
 #include "storage_mode.h"
-#include "lcd_display.h"
 
 static USBMSC msc;
 static bool mscMediaPresent = false;
-
-// Best-effort progress bar for USB writes - see MSC_PROGRESS_ASSUMED_BYTES/
-// MSC_PROGRESS_IDLE_MS in config.h for why this can only ever be a rough
-// activity indicator, not an accurate percentage.
-static uint32_t mscBurstBytes = 0;
-static uint32_t mscLastWriteMs = 0;
-static bool mscProgressActive = false;
 
 // TinyUSB requests are block-size-aligned in practice, but this handles an
 // arbitrary offset/length by reading whole sectors and copying the
@@ -65,21 +57,6 @@ static int32_t mscOnWrite(uint32_t lba, uint32_t offset, uint8_t *buffer, uint32
     done += take;
   }
 
-  if(done > 0){
-    uint32_t now = millis();
-    if(!mscProgressActive || (now - mscLastWriteMs) > MSC_PROGRESS_IDLE_MS){
-      mscBurstBytes = 0;
-      mscProgressActive = true;
-    }
-    mscBurstBytes += done;
-    mscLastWriteMs = now;
-    uint64_t percent = ((uint64_t)mscBurstBytes * 100) / MSC_PROGRESS_ASSUMED_BYTES;
-    if(percent > 100){
-      percent = 100;
-    }
-    LCD_showProgress((uint8_t)percent);
-  }
-
   return done;
 }
 
@@ -111,12 +88,5 @@ void USB_MSC_process(void){
     }
     msc.mediaPresent(ready);
     mscMediaPresent = ready;
-  }
-
-  // No callback marks "the copy is done" at the block level, so a gap this
-  // long since the last sector write is taken as the end of the transfer.
-  if(mscProgressActive && (millis() - mscLastWriteMs) > MSC_PROGRESS_IDLE_MS){
-    LCD_hideProgress();
-    mscProgressActive = false;
   }
 }

@@ -1,3 +1,6 @@
+// Must match the #define in http_server.cpp, the other file that includes
+// WebServer.h - see that file for why.
+#define HTTP_RAW_BUFLEN 8192
 #include <WebServer.h>
 #include <Update.h>      // flashes a staged firmware image, used by SDSTOR_applyFirmwareUpdate()
 #include "config.h"

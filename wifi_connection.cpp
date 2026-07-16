@@ -175,6 +175,9 @@ static void APMode(void) {
     WiFi.mode(WIFI_AP_STA);          // Ensure AP+STA mode
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
+    // Modem power-save is on by default and duty-cycles the radio between
+    // packets, adding per-round-trip latency that tanks upload throughput.
+    WiFi.setSleep(false);
 
     // WiFi.macAddress() can read back all-zero on the S3 if called this
     // early (before the STA netif is fully up); the factory-programmed base
