@@ -83,11 +83,13 @@ static void showNotFound(void){
   webServer->send(404, "text/html; charset=iso-8859-1","<html><head> <title>404 Not Found</title></head><body><h1>Not Found</h1></body></html>");
 }
 
-static void showStatusPage(bool goToHome = false) {
+static void showStatusPage(bool goToHome = false, bool connecting = false) {
   String response = pageStart();
   response += "<h1>Connection Status</h1><p>";
   response += MAIN_getStatusMsg() + "</p>";
-  if(goToHome){
+  if(connecting){
+    response += FPSTR(CONNECTING_HTML);
+  }else if(goToHome){
     response += FPSTR(REDIRECT_HTML);
   }
   response += FPSTR(HTML_END);
@@ -160,15 +162,16 @@ static void saveWiFi(void){
   WIFIC_setStPass(pass);
 
   String http_statusMessage;
+  bool connecting = ssid.length() > 3;
 
-  if(ssid.length() > 3){
+  if(connecting){
     http_statusMessage = "Saving settings and connecting to SSID: " + ssid;
   }else{
     http_statusMessage = "No SSID selected...";
   }
 
   MAIN_setStatusMsg(http_statusMessage);
-  showStatusPage();
+  showStatusPage(false, connecting);
 
   WIFIC_stationMode();
 }
@@ -354,6 +357,12 @@ static void wifiRssi(void){
   webServer->send(200, "text/plain", String(WIFIC_getRssi()));
 }
 
+// Polled by CONNECTING_HTML after a WiFi credentials save, to redirect once
+// the station connects (or fall back to the AP if it never does).
+static void staStatus(void){
+  webServer->send(200, "text/plain", WIFIC_getStationIp());
+}
+
 static void ejectSD(void){
   if(SDSTOR_eject()){
     webServer->send(200, "text/plain", "SD card safely ejected. You may remove it now.");
@@ -407,6 +416,7 @@ void HTTP_SERVER_init(void){
   webServer->on("/downloadupdate", HTTP_GET, downloadUpdate);
   webServer->on("/applyupdate", HTTP_GET, applyUpdate);
   webServer->on("/api/rssi", HTTP_GET, wifiRssi);
+  webServer->on("/api/stastatus", HTTP_GET, staStatus);
   webServer->on("/eject", HTTP_GET, ejectSD);
   webServer->on("/format", HTTP_GET, formatSD);
   webServer->onNotFound(showStartPage);

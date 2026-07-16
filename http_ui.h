@@ -870,6 +870,39 @@ static const char REDIRECT_HTML[] PROGMEM = R"(
 </script>
 )";
 
+// Polls /api/stastatus after a WiFi credentials save: redirects to the
+// station's IP once connected, or back to the AP if it hasn't connected
+// within STA_CONNECT_TIMEOUT_S seconds. Whichever network the browser is
+// actually on at that point decides which redirect target it can reach -
+// e.g. a browser still joined to the device's own AP can't load the station
+// IP until it switches networks itself.
+static const char CONNECTING_HTML[] PROGMEM = R"(
+<p id="tmr">Connecting...</p>
+<script>
+  var STA_CONNECT_TIMEOUT_S = 20;
+  var elapsed = 0;
+  function poll(){
+    fetch('/api/stastatus').then(function(r){ return r.text(); }).then(function(ip){
+      ip = ip.trim();
+      if(ip.length > 0){
+        window.location.href = 'http://' + ip + '/';
+        return;
+      }
+      elapsed++;
+      if(elapsed >= STA_CONNECT_TIMEOUT_S){
+        document.getElementById('tmr').innerHTML = 'Could not connect - returning to the access point.';
+        window.location.href = 'http://192.168.4.1/';
+        return;
+      }
+      setTimeout(poll, 1000);
+    }).catch(function(){
+      setTimeout(poll, 1000);
+    });
+  }
+  poll();
+</script>
+)";
+
 static const char API_HTML_0[] PROGMEM = R"(
 <style>
   h1{ font-size:1.6rem; margin:0 0 .2rem; text-align:center; }

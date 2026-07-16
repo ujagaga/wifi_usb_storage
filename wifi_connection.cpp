@@ -11,6 +11,7 @@
 
 #include <WiFi.h>
 #include <esp_mac.h>
+#include <esp_wifi.h>
 #include "config.h"
 #include "lcd_display.h"
 #include "sd_storage.h"
@@ -193,6 +194,10 @@ static void APMode(void) {
 
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
     WiFi.softAP(myApName, AP_PASS);
+    // 40MHz roughly doubles the theoretical PHY-rate ceiling vs the 20MHz
+    // default, independent of the TCP-window/buffer tuning tried elsewhere.
+    // Must be called after softAP() brings the AP interface up.
+    esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT40);
 
     Serial.printf("AP active: %s, IP: %s\n", myApName, apIP.toString().c_str());
 }
