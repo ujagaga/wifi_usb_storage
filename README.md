@@ -43,6 +43,23 @@ native USB (see USB mass storage below).
   takes roughly 29 minutes (less on a stronger/less congested link). If
   uploads feel slow, check the RSSI reading before suspecting the SD card or
   code - a weak signal forces the radio down to a much lower PHY rate.
+- **On the device's own AP (no station link), the ~800KB/s ceiling is lwIP's
+  TCP window**, not the SD card or HTTP handling - measured RTT to the AP
+  (~6.7ms) times the Arduino-ESP32 default `CONFIG_LWIP_TCP_WND_DEFAULT`
+  (5760 bytes) lands almost exactly on the observed number. Raising it
+  requires rebuilding the WiFi/lwIP stack from source (Arduino's boards.txt
+  menus don't expose it - `arduino-cli`/Arduino IDE link against Espressif's
+  precompiled core libs), which means a full ESP-IDF/`idf.py` component-based
+  build instead of the plain sketch build here. Tried it: with a matching
+  compiler-optimization/IRAM-placement setup (the precompiled libs' build
+  flags aren't public, so a from-source rebuild needs its own tuning to even
+  match the stock baseline) and the TCP window raised to 65534, peak went
+  from ~800KB/s to ~900KB/s+, but the real-world gain was modest (~34min to
+  ~30min for a 1.6GB file) and added timing variance - not the multi-fold
+  jump Espressif's shielded-lab iperf numbers would suggest. Not worth
+  maintaining a second build system for that gain, so this repo stays on the
+  plain `arduino-cli` build; the ~800KB/s figure above is the accepted
+  ceiling on this AP-only path.
 
 ### SD card storage
 - **Folders.** Create folders, navigate into them (breadcrumb trail at the
